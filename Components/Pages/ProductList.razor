@@ -189,7 +189,7 @@
         });
 
         var result = await dialog.Result;
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadData();
             Snackbar.Add("Product added successfully!", Severity.Success);
@@ -209,7 +209,7 @@
         });
 
         var result = await dialog.Result;
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadData();
             Snackbar.Add("Product updated successfully!", Severity.Success);

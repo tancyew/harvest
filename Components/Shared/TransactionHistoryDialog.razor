@@ -9,13 +9,13 @@
                 <MudDatePicker @bind-Date="_startDate"
                               Label="Start Date"
                               Clearable="true"
-                              OnChange="@LoadTransactions" />
+                              @bind-Date:after="LoadTransactions" />
             </MudItem>
             <MudItem xs="12" sm="6">
                 <MudDatePicker @bind-Date="_endDate"
                               Label="End Date"
                               Clearable="true"
-                              OnChange="@LoadTransactions" />
+                              @bind-Date:after="LoadTransactions" />
             </MudItem>
         </MudGrid>
 
