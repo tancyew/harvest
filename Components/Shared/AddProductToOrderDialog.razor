@@ -20,10 +20,14 @@
                     @if (_selectedProduct != null)
                     {
                         <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
-                            Base Price: $@_selectedProduct.BasePrice.ToString("N2") per @_selectedProduct.UnitOfMeasure
+                            <MudText Typo="Typo.body2">
+                                Base Price: $@_selectedProduct.BasePrice.ToString("N2") per @_selectedProduct.UnitOfMeasure
+                            </MudText>
                             @if (_selectedProduct.Inventory != null)
                             {
-                                <br />Available Stock: @_selectedProduct.Inventory.QuantityAvailable.ToString("N2") @_selectedProduct.UnitOfMeasure
+                                <MudText Typo="Typo.body2">
+                                    Available Stock: @_selectedProduct.Inventory.QuantityAvailable.ToString("N2") @_selectedProduct.UnitOfMeasure
+                                </MudText>
                             }
                         </MudAlert>
                     }

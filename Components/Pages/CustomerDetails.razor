@@ -364,7 +364,7 @@ else
 
         if (result == true)
         {
-            await PricingService.DeleteCustomerPricingAsync(pricing.CustomerPricingId);
+            await PricingService.DeletePricingAsync(pricing.CustomerPricingId);
             await LoadCustomer();
             Snackbar.Add("Pricing rule deleted", Severity.Info);
         }

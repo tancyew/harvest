@@ -51,7 +51,7 @@ else
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Credit Note Details</MudText>
                             <MudText Typo="Typo.body2">
-                                <strong>Date:</strong> @_creditNote.CreditNoteDate.ToString("MMM dd, yyyy")
+                                <strong>Date:</strong> @_creditNote.IssueDate.ToString("MMM dd, yyyy")
                             </MudText>
                             <MudText Typo="Typo.body2">
                                 <strong>Reason:</strong> @_creditNote.Reason
@@ -63,11 +63,11 @@ else
                                 </MudText>
                             }
                         </MudItem>
-                        @if (!string.IsNullOrEmpty(_creditNote.Notes))
+                        @if (!string.IsNullOrEmpty(_creditNote.Description))
                         {
                             <MudItem xs="12">
-                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Notes</MudText>
-                                <MudText Typo="Typo.body2">@_creditNote.Notes</MudText>
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Description</MudText>
+                                <MudText Typo="Typo.body2">@_creditNote.Description</MudText>
                             </MudItem>
                         }
                     </MudGrid>
@@ -85,20 +85,20 @@ else
                     <MudTable Items="@_creditNote.LineItems" Dense="true" Hover="true">
                         <HeaderContent>
                             <MudTh>Product</MudTh>
+                            <MudTh>Description</MudTh>
                             <MudTh>Unit Price</MudTh>
                             <MudTh>Quantity</MudTh>
-                            <MudTh>Discount</MudTh>
-                            <MudTh>Total</MudTh>
+                            <MudTh>Amount</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>
                                 <MudText Typo="Typo.body2">@context.Product.Name</MudText>
                                 <MudText Typo="Typo.caption">@context.Product.SKU</MudText>
                             </MudTd>
+                            <MudTd>@context.Description</MudTd>
                             <MudTd>$@context.UnitPrice.ToString("N2")</MudTd>
                             <MudTd>@context.Quantity @context.Product.UnitOfMeasure</MudTd>
-                            <MudTd>$@context.DiscountAmount.ToString("N2")</MudTd>
-                            <MudTd><strong>$@context.LineTotal.ToString("N2")</strong></MudTd>
+                            <MudTd><strong>$@context.Amount.ToString("N2")</strong></MudTd>
                         </RowTemplate>
                     </MudTable>
 
@@ -106,31 +106,10 @@ else
 
                     <MudGrid Justify="Justify.FlexEnd">
                         <MudItem xs="12" sm="6" md="4">
-                            <MudStack Spacing="2">
-                                <div class="d-flex justify-space-between">
-                                    <MudText>Subtotal:</MudText>
-                                    <MudText><strong>$@_creditNote.SubTotal.ToString("N2")</strong></MudText>
-                                </div>
-                                @if (_creditNote.DiscountAmount > 0)
-                                {
-                                    <div class="d-flex justify-space-between">
-                                        <MudText>Discount:</MudText>
-                                        <MudText Color="Color.Success">-$@_creditNote.DiscountAmount.ToString("N2")</MudText>
-                                    </div>
-                                }
-                                @if (_creditNote.TaxAmount > 0)
-                                {
-                                    <div class="d-flex justify-space-between">
-                                        <MudText>Tax:</MudText>
-                                        <MudText>$@_creditNote.TaxAmount.ToString("N2")</MudText>
-                                    </div>
-                                }
-                                <MudDivider />
-                                <div class="d-flex justify-space-between">
-                                    <MudText Typo="Typo.h6">Credit Amount:</MudText>
-                                    <MudText Typo="Typo.h6" Color="Color.Success">$@_creditNote.TotalAmount.ToString("N2")</MudText>
-                                </div>
-                            </MudStack>
+                            <div class="d-flex justify-space-between">
+                                <MudText Typo="Typo.h6">Credit Amount:</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Success">$@_creditNote.Amount.ToString("N2")</MudText>
+                            </div>
                         </MudItem>
                     </MudGrid>
                 </MudCardContent>
@@ -294,7 +273,7 @@ else
 
         if (result == true)
         {
-            await CreditNoteService.ApproveCreditNoteAsync(_creditNote.CreditNoteId);
+            await CreditNoteService.ApproveCreditNoteAsync(_creditNote.CreditNoteId, "System");
             Snackbar.Add("Credit note approved successfully!", Severity.Success);
             await LoadCreditNote();
             SetupBreadcrumbs();
@@ -330,7 +309,7 @@ else
 
         if (result == true)
         {
-            await CreditNoteService.CancelCreditNoteAsync(_creditNote.CreditNoteId);
+            await CreditNoteService.RejectCreditNoteAsync(_creditNote.CreditNoteId);
             Snackbar.Add("Credit note cancelled", Severity.Info);
             await LoadCreditNote();
         }

@@ -55,7 +55,7 @@
                             var difference = _selectedProduct.BasePrice - _pricing.DirectPrice.Value;
                             var percentDiff = (difference / _selectedProduct.BasePrice) * 100;
                             <MudText Typo="Typo.caption" Color="@(difference > 0 ? Color.Success : Color.Error)">
-                                @(difference > 0 ? $"Saves ${difference:N2} ({percentDiff:N1}% discount)" : $"Costs ${Math.Abs(difference):N2} more ({Math.Abs(percentDiff):N1}% markup)")
+                                @(difference > 0 ? $"Saves ${difference.ToString("N2")} ({percentDiff.ToString("N1")}% discount)" : $"Costs ${Math.Abs(difference).ToString("N2")} more ({Math.Abs(percentDiff).ToString("N1")}% markup)")
                             </MudText>
                         }
                     </MudItem>
@@ -179,10 +179,10 @@
 
         try
         {
-            _pricing.EffectiveDate = _effectiveDate ?? DateTime.UtcNow;
-            _pricing.ExpiryDate = _expiryDate;
+            _pricing.EffectiveFrom = _effectiveDate ?? DateTime.UtcNow;
+            _pricing.EffectiveTo = _expiryDate;
 
-            await PricingService.CreateCustomerPricingAsync(_pricing);
+            await PricingService.CreatePricingAsync(_pricing);
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)

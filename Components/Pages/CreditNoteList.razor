@@ -58,9 +58,9 @@
             <MudLink Href="@($"/invoices/{context.Invoice.InvoiceId}")">@context.Invoice.InvoiceNumber</MudLink>
         </MudTd>
         <MudTd DataLabel="Customer">@context.Invoice.SalesOrder.Customer.BusinessName</MudTd>
-        <MudTd DataLabel="Date">@context.CreditNoteDate.ToString("MMM dd, yyyy")</MudTd>
+        <MudTd DataLabel="Date">@context.IssueDate.ToString("MMM dd, yyyy")</MudTd>
         <MudTd DataLabel="Amount">
-            <MudText Color="Color.Success"><strong>$@context.TotalAmount.ToString("N2")</strong></MudText>
+            <MudText Color="Color.Success"><strong>$@context.Amount.ToString("N2")</strong></MudText>
         </MudTd>
         <MudTd DataLabel="Reason">@context.Reason</MudTd>
         <MudTd DataLabel="Status">
@@ -157,7 +157,7 @@
 
         if (result == true)
         {
-            await CreditNoteService.ApproveCreditNoteAsync(creditNote.CreditNoteId);
+            await CreditNoteService.ApproveCreditNoteAsync(creditNote.CreditNoteId, "System");
             Snackbar.Add("Credit note approved", Severity.Success);
             await LoadData();
         }
@@ -173,7 +173,7 @@
 
         if (result == true)
         {
-            await CreditNoteService.CancelCreditNoteAsync(creditNote.CreditNoteId);
+            await CreditNoteService.RejectCreditNoteAsync(creditNote.CreditNoteId);
             Snackbar.Add("Credit note cancelled", Severity.Info);
             await LoadData();
         }
