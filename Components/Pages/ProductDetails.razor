@@ -153,19 +153,19 @@ else
                         <MudButton Variant="Variant.Filled"
                                   Color="Color.Success"
                                   StartIcon="@Icons.Material.Filled.AddCircle"
-                                  OnClick="@(() => OpenStockAdjustmentDialog(\"IN\"))">
+                                  OnClick="@(() => OpenStockAdjustmentDialog("IN"))">
                             Receive Stock
                         </MudButton>
                         <MudButton Variant="Variant.Filled"
                                   Color="Color.Error"
                                   StartIcon="@Icons.Material.Filled.RemoveCircle"
-                                  OnClick="@(() => OpenStockAdjustmentDialog(\"OUT\"))">
+                                  OnClick="@(() => OpenStockAdjustmentDialog("OUT"))">
                             Issue Stock
                         </MudButton>
                         <MudButton Variant="Variant.Outlined"
                                   Color="Color.Primary"
                                   StartIcon="@Icons.Material.Filled.Edit"
-                                  OnClick="@(() => OpenStockAdjustmentDialog(\"ADJUSTMENT\"))">
+                                  OnClick="@(() => OpenStockAdjustmentDialog("ADJUSTMENT"))">
                             Adjust Stock
                         </MudButton>
                     </MudCardActions>
