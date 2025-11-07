@@ -1,0 +1,139 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject JournalService JournalService
+@inject ProductService ProductService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="JournalEntry.Title"
+                                 Label="Title"
+                                 Required="true"
+                                 RequiredError="Title is required" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="JournalEntry.EntryType"
+                              Label="Entry Type"
+                              Required="true">
+                        <MudSelectItem Value="@("Note")">Note</MudSelectItem>
+                        <MudSelectItem Value="@("Harvest")">Harvest</MudSelectItem>
+                        <MudSelectItem Value="@("Sale")">Sale</MudSelectItem>
+                        <MudSelectItem Value="@("Purchase")">Purchase</MudSelectItem>
+                        <MudSelectItem Value="@("Adjustment")">Adjustment</MudSelectItem>
+                        <MudSelectItem Value="@("General")">General</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudDatePicker @bind-Date="_entryDate"
+                                  Label="Entry Date"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="JournalEntry.Description"
+                                 Label="Description"
+                                 Lines="4" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="JournalEntry.ProductId"
+                              Label="Related Product (Optional)"
+                              Clearable="true">
+                        @foreach (var product in _products)
+                        {
+                            <MudSelectItem Value="@product.ProductId">@product.Name (@product.SKU)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="JournalEntry.Reference"
+                                 Label="Reference (Optional)"
+                                 Placeholder="e.g., INV-001, PO-123" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="JournalEntry.Amount"
+                                    Label="Amount (Optional)"
+                                    Min="0"
+                                    Step="0.01M"
+                                    Format="N2"
+                                    Adornment="Adornment.Start"
+                                    AdornmentText="$" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="JournalEntry.CreatedBy"
+                                 Label="Created By (Optional)"
+                                 Placeholder="Your name" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  OnClick="Save"
+                  Disabled="@(!_isValid)">
+            @(IsNew ? "Create" : "Update")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public JournalEntry JournalEntry { get; set; } = new();
+
+    [Parameter]
+    public bool IsNew { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+    private List<Product> _products = new();
+    private DateTime? _entryDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _products = await ProductService.GetActiveProductsAsync();
+        _entryDate = JournalEntry.EntryDate == default ? DateTime.Now : JournalEntry.EntryDate;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await _form!.Validate();
+
+        if (!_isValid)
+        {
+            Snackbar.Add("Please fix validation errors", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            if (_entryDate.HasValue)
+                JournalEntry.EntryDate = _entryDate.Value;
+
+            if (IsNew)
+            {
+                await JournalService.CreateEntryAsync(JournalEntry);
+            }
+            else
+            {
+                await JournalService.UpdateEntryAsync(JournalEntry);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

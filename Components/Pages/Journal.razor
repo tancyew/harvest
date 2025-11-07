@@ -1,0 +1,205 @@
+@page "/journal"
+@using Harvest.Models
+@using Harvest.Services
+@inject JournalService JournalService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Journal - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Journal Entries</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker @bind-Date="_startDate"
+                              Label="Start Date"
+                              Clearable="true"
+                              @bind-Date:after="LoadData" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker @bind-Date="_endDate"
+                              Label="End Date"
+                              Clearable="true"
+                              @bind-Date:after="LoadData" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect @bind-Value="_selectedType"
+                          Label="Entry Type"
+                          Clearable="true"
+                          OnClearButtonClick="@(() => { _selectedType = null; LoadData(); })">
+                    <MudSelectItem Value="@("Note")">Note</MudSelectItem>
+                    <MudSelectItem Value="@("Harvest")">Harvest</MudSelectItem>
+                    <MudSelectItem Value="@("Sale")">Sale</MudSelectItem>
+                    <MudSelectItem Value="@("Purchase")">Purchase</MudSelectItem>
+                    <MudSelectItem Value="@("Adjustment")">Adjustment</MudSelectItem>
+                    <MudSelectItem Value="@("General")">General</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3" Class="d-flex align-end justify-end">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="@OpenAddDialog">
+                    New Entry
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_filteredEntries"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading">
+    <HeaderContent>
+        <MudTh>Date</MudTh>
+        <MudTh>Title</MudTh>
+        <MudTh>Type</MudTh>
+        <MudTh>Product</MudTh>
+        <MudTh>Amount</MudTh>
+        <MudTh>Reference</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Date">@context.EntryDate.ToString("MMM dd, yyyy")</MudTd>
+        <MudTd DataLabel="Title">
+            <MudText Typo="Typo.body2">@context.Title</MudText>
+            @if (!string.IsNullOrEmpty(context.Description))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Description.Substring(0, Math.Min(50, context.Description.Length))...</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Type">
+            <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(context.EntryType)">@context.EntryType</MudChip>
+        </MudTd>
+        <MudTd DataLabel="Product">@(context.Product?.Name ?? "-")</MudTd>
+        <MudTd DataLabel="Amount">@(context.Amount.HasValue ? $"${context.Amount.Value:N2}" : "-")</MudTd>
+        <MudTd DataLabel="Reference">@(context.Reference ?? "-")</MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                              Color="Color.Primary"
+                              Size="Size.Small"
+                              OnClick="@(() => OpenEditDialog(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                              Color="Color.Error"
+                              Size="Size.Small"
+                              OnClick="@(() => DeleteEntry(context))" />
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<JournalEntry> _entries = new();
+    private List<JournalEntry> _filteredEntries = new();
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private string? _selectedType;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        if (_startDate.HasValue || _endDate.HasValue)
+        {
+            _entries = await JournalService.GetEntriesByDateRangeAsync(_startDate, _endDate);
+        }
+        else if (!string.IsNullOrEmpty(_selectedType))
+        {
+            _entries = await JournalService.GetEntriesByTypeAsync(_selectedType);
+        }
+        else
+        {
+            _entries = await JournalService.GetAllEntriesAsync();
+        }
+
+        _filteredEntries = _entries;
+        _loading = false;
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters<JournalEntryDialog>();
+        parameters.Add(x => x.JournalEntry, new JournalEntry());
+        parameters.Add(x => x.IsNew, true);
+
+        var dialog = await DialogService.ShowAsync<JournalEntryDialog>("New Journal Entry", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Journal entry created!", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(JournalEntry entry)
+    {
+        var parameters = new DialogParameters<JournalEntryDialog>();
+        parameters.Add(x => x.JournalEntry, entry);
+        parameters.Add(x => x.IsNew, false);
+
+        var dialog = await DialogService.ShowAsync<JournalEntryDialog>("Edit Journal Entry", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Journal entry updated!", Severity.Success);
+        }
+    }
+
+    private async Task DeleteEntry(JournalEntry entry)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete '{entry.Title}'?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var success = await JournalService.DeleteEntryAsync(entry.JournalEntryId);
+            if (success)
+            {
+                Snackbar.Add("Journal entry deleted!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete entry", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetTypeColor(string type)
+    {
+        return type switch
+        {
+            "Harvest" => Color.Success,
+            "Sale" => Color.Primary,
+            "Purchase" => Color.Info,
+            "Adjustment" => Color.Warning,
+            "Note" => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+}
