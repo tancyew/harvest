@@ -15,6 +15,16 @@ public class ApplicationDbContext : DbContext
     public DbSet<Inventory> Inventories { get; set; }
     public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
     public DbSet<JournalEntry> JournalEntries { get; set; }
+    public DbSet<User> Users { get; set; }
+    public DbSet<OtpCode> OtpCodes { get; set; }
+    public DbSet<Customer> Customers { get; set; }
+    public DbSet<SalesOrder> SalesOrders { get; set; }
+    public DbSet<OrderLineItem> OrderLineItems { get; set; }
+    public DbSet<Invoice> Invoices { get; set; }
+    public DbSet<Payment> Payments { get; set; }
+    public DbSet<CreditNote> CreditNotes { get; set; }
+    public DbSet<CreditNoteLineItem> CreditNoteLineItems { get; set; }
+    public DbSet<CustomerPricing> CustomerPricings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +84,155 @@ public class ApplicationDbContext : DbContext
                   .OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(e => e.EntryType);
             entity.HasIndex(e => e.EntryDate);
+        });
+
+        // User configuration
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
+            entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => e.Phone);
+        });
+
+        // OtpCode configuration
+        modelBuilder.Entity<OtpCode>(entity =>
+        {
+            entity.HasKey(e => e.OtpCodeId);
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.Code, e.ExpiryTime });
+        });
+
+        // Customer configuration
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            entity.HasKey(e => e.CustomerId);
+            entity.Property(e => e.CreditLimit).HasPrecision(18, 2);
+            entity.Property(e => e.OutstandingBalance).HasPrecision(18, 2);
+            entity.HasOne(e => e.User)
+                  .WithOne(u => u.Customer)
+                  .HasForeignKey<Customer>(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.BusinessName);
+        });
+
+        // SalesOrder configuration
+        modelBuilder.Entity<SalesOrder>(entity =>
+        {
+            entity.HasKey(e => e.SalesOrderId);
+            entity.Property(e => e.SubTotal).HasPrecision(18, 2);
+            entity.Property(e => e.DiscountAmount).HasPrecision(18, 2);
+            entity.Property(e => e.TaxAmount).HasPrecision(18, 2);
+            entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
+            entity.HasOne(e => e.Customer)
+                  .WithMany(c => c.SalesOrders)
+                  .HasForeignKey(e => e.CustomerId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => e.OrderNumber).IsUnique();
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.OrderDate);
+        });
+
+        // OrderLineItem configuration
+        modelBuilder.Entity<OrderLineItem>(entity =>
+        {
+            entity.HasKey(e => e.LineItemId);
+            entity.Property(e => e.Quantity).HasPrecision(18, 2);
+            entity.Property(e => e.UnitPrice).HasPrecision(18, 2);
+            entity.Property(e => e.DiscountAmount).HasPrecision(18, 2);
+            entity.Property(e => e.LineTotal).HasPrecision(18, 2);
+            entity.HasOne(e => e.SalesOrder)
+                  .WithMany(o => o.LineItems)
+                  .HasForeignKey(e => e.SalesOrderId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Product)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Invoice configuration
+        modelBuilder.Entity<Invoice>(entity =>
+        {
+            entity.HasKey(e => e.InvoiceId);
+            entity.Property(e => e.SubTotal).HasPrecision(18, 2);
+            entity.Property(e => e.TaxAmount).HasPrecision(18, 2);
+            entity.Property(e => e.DiscountAmount).HasPrecision(18, 2);
+            entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
+            entity.Property(e => e.PaidAmount).HasPrecision(18, 2);
+            entity.Property(e => e.BalanceAmount).HasPrecision(18, 2);
+            entity.HasOne(e => e.SalesOrder)
+                  .WithOne(o => o.Invoice)
+                  .HasForeignKey<Invoice>(e => e.SalesOrderId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.InvoiceNumber).IsUnique();
+            entity.HasIndex(e => e.Status);
+        });
+
+        // Payment configuration
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.HasKey(e => e.PaymentId);
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.HasOne(e => e.Invoice)
+                  .WithMany(i => i.Payments)
+                  .HasForeignKey(e => e.InvoiceId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.PaymentNumber).IsUnique();
+            entity.HasIndex(e => e.PaymentDate);
+        });
+
+        // CreditNote configuration
+        modelBuilder.Entity<CreditNote>(entity =>
+        {
+            entity.HasKey(e => e.CreditNoteId);
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.HasOne(e => e.Invoice)
+                  .WithMany(i => i.CreditNotes)
+                  .HasForeignKey(e => e.InvoiceId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Customer)
+                  .WithMany()
+                  .HasForeignKey(e => e.CustomerId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => e.CreditNoteNumber).IsUnique();
+            entity.HasIndex(e => e.Status);
+        });
+
+        // CreditNoteLineItem configuration
+        modelBuilder.Entity<CreditNoteLineItem>(entity =>
+        {
+            entity.HasKey(e => e.LineItemId);
+            entity.Property(e => e.Quantity).HasPrecision(18, 2);
+            entity.Property(e => e.UnitPrice).HasPrecision(18, 2);
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.HasOne(e => e.CreditNote)
+                  .WithMany(c => c.LineItems)
+                  .HasForeignKey(e => e.CreditNoteId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Product)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // CustomerPricing configuration
+        modelBuilder.Entity<CustomerPricing>(entity =>
+        {
+            entity.HasKey(e => e.CustomerPricingId);
+            entity.Property(e => e.DirectPrice).HasPrecision(18, 2);
+            entity.Property(e => e.DiscountPercentage).HasPrecision(5, 2);
+            entity.HasOne(e => e.Customer)
+                  .WithMany(c => c.CustomerPricings)
+                  .HasForeignKey(e => e.CustomerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Product)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProductId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.CustomerId, e.ProductId });
         });
 
         // Seed data
