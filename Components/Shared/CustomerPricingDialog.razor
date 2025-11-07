@@ -1,0 +1,193 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject ProductService ProductService
+@inject CustomerPricingService PricingService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudAutocomplete T="Product"
+                                    @bind-Value="_selectedProduct"
+                                    Label="Product"
+                                    Required="true"
+                                    SearchFunc="@SearchProducts"
+                                    ToStringFunc="@(p => p != null ? $"{p.Name} ({p.SKU})" : "")"
+                                    ResetValueOnEmptyText="true"
+                                    Clearable="true"
+                                    @bind-Value:after="OnProductSelected" />
+                    @if (_selectedProduct != null)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            Current Base Price: $@_selectedProduct.BasePrice.ToString("N2") per @_selectedProduct.UnitOfMeasure
+                        </MudAlert>
+                    }
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Pricing Method</MudText>
+                    <MudRadioGroup @bind-Value="_pricingMethod">
+                        <MudRadio T="string" Value="@("DirectPrice")" Color="Color.Primary">
+                            Direct Price - Set a specific price for this customer
+                        </MudRadio>
+                        <MudRadio T="string" Value="@("Discount")" Color="Color.Secondary">
+                            Percentage Discount - Apply a discount to the base price
+                        </MudRadio>
+                    </MudRadioGroup>
+                </MudItem>
+
+                @if (_pricingMethod == "DirectPrice")
+                {
+                    <MudItem xs="12">
+                        <MudNumericField @bind-Value="_pricing.DirectPrice"
+                                        Label="Direct Price"
+                                        Required="true"
+                                        Min="0M"
+                                        Step="0.01M"
+                                        Format="N2"
+                                        Adornment="Adornment.Start"
+                                        AdornmentText="$"
+                                        HelperText="Set a fixed price for this product" />
+                        @if (_selectedProduct != null && _pricing.DirectPrice.HasValue)
+                        {
+                            var difference = _selectedProduct.BasePrice - _pricing.DirectPrice.Value;
+                            var percentDiff = (difference / _selectedProduct.BasePrice) * 100;
+                            <MudText Typo="Typo.caption" Color="@(difference > 0 ? Color.Success : Color.Error)">
+                                @(difference > 0 ? $"Saves ${difference:N2} ({percentDiff:N1}% discount)" : $"Costs ${Math.Abs(difference):N2} more ({Math.Abs(percentDiff):N1}% markup)")
+                            </MudText>
+                        }
+                    </MudItem>
+                }
+                else if (_pricingMethod == "Discount")
+                {
+                    <MudItem xs="12">
+                        <MudNumericField @bind-Value="_pricing.DiscountPercentage"
+                                        Label="Discount Percentage"
+                                        Required="true"
+                                        Min="0M"
+                                        Max="100M"
+                                        Step="0.1M"
+                                        Format="N2"
+                                        Adornment="Adornment.End"
+                                        AdornmentText="%"
+                                        HelperText="Enter discount percentage (0-100)" />
+                        @if (_selectedProduct != null && _pricing.DiscountPercentage > 0)
+                        {
+                            var discountedPrice = _selectedProduct.BasePrice * (1 - (_pricing.DiscountPercentage / 100));
+                            var savings = _selectedProduct.BasePrice - discountedPrice;
+                            <MudText Typo="Typo.caption" Color="Color.Success">
+                                Final Price: $@discountedPrice.ToString("N2") (Saves $@savings.ToString("N2"))
+                            </MudText>
+                        }
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudDatePicker @bind-Date="_effectiveDate"
+                                  Label="Effective From"
+                                  Required="true"
+                                  HelperText="When should this pricing take effect?" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDatePicker @bind-Date="_expiryDate"
+                                  Label="Expires On (Optional)"
+                                  MinDate="_effectiveDate"
+                                  HelperText="Leave empty for no expiration" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Success"
+                  Variant="Variant.Filled"
+                  OnClick="Save"
+                  Disabled="@(!_isValid || _selectedProduct == null)">
+            Add Pricing Rule
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public int CustomerId { get; set; }
+
+    private CustomerPricing _pricing = new();
+    private Product? _selectedProduct;
+    private List<Product> _products = new();
+    private string _pricingMethod = "DirectPrice";
+    private DateTime? _effectiveDate = DateTime.UtcNow;
+    private DateTime? _expiryDate;
+    private MudForm? _form;
+    private bool _isValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _products = await ProductService.GetActiveProductsAsync();
+        _pricing.CustomerId = CustomerId;
+    }
+
+    private async Task<IEnumerable<Product>> SearchProducts(string searchText, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return _products;
+
+        return _products.Where(p =>
+            p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            p.SKU.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnProductSelected()
+    {
+        if (_selectedProduct != null)
+        {
+            _pricing.ProductId = _selectedProduct.ProductId;
+            _pricing.DirectPrice = _selectedProduct.BasePrice;
+            _pricing.DiscountPercentage = 0;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        if (_selectedProduct == null)
+        {
+            Snackbar.Add("Please select a product", Severity.Warning);
+            return;
+        }
+
+        // Clear the value we're not using
+        if (_pricingMethod == "DirectPrice")
+        {
+            _pricing.DiscountPercentage = 0;
+        }
+        else
+        {
+            _pricing.DirectPrice = null;
+        }
+
+        try
+        {
+            _pricing.EffectiveDate = _effectiveDate ?? DateTime.UtcNow;
+            _pricing.ExpiryDate = _expiryDate;
+
+            await PricingService.CreateCustomerPricingAsync(_pricing);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

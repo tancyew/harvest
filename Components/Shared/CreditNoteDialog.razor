@@ -1,0 +1,264 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject InvoiceService InvoiceService
+@inject ProductService ProductService
+@inject CreditNoteService CreditNoteService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                <!-- Invoice Selection -->
+                <MudItem xs="12">
+                    <MudAutocomplete T="Invoice"
+                                    @bind-Value="_selectedInvoice"
+                                    Label="Invoice"
+                                    Required="true"
+                                    SearchFunc="@SearchInvoices"
+                                    ToStringFunc="@(i => i != null ? $"{i.InvoiceNumber} - {i.SalesOrder.Customer.BusinessName} ($  {i.TotalAmount:N2})" : "")"
+                                    ResetValueOnEmptyText="true"
+                                    Clearable="true"
+                                    @bind-Value:after="OnInvoiceSelected" />
+                    @if (_selectedInvoice != null)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            Invoice Total: $@_selectedInvoice.TotalAmount.ToString("N2") |
+                            Paid: $@_selectedInvoice.PaidAmount.ToString("N2") |
+                            Balance: $@_selectedInvoice.BalanceAmount.ToString("N2")
+                        </MudAlert>
+                    }
+                </MudItem>
+
+                <!-- Reason -->
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="_creditNote.Reason"
+                              Label="Reason"
+                              Required="true">
+                        <MudSelectItem Value="@("Product Return")">Product Return</MudSelectItem>
+                        <MudSelectItem Value="@("Damaged Goods")">Damaged Goods</MudSelectItem>
+                        <MudSelectItem Value="@("Pricing Error")">Pricing Error</MudSelectItem>
+                        <MudSelectItem Value="@("Goodwill Gesture")">Goodwill Gesture</MudSelectItem>
+                        <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Date -->
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_creditNoteDate"
+                                  Label="Credit Note Date"
+                                  Required="true" />
+                </MudItem>
+
+                <!-- Line Items Section -->
+                @if (_selectedInvoice != null)
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                        <MudText Typo="Typo.h6" Class="mb-3">Credit Items</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                            Select items from the invoice to credit
+                        </MudText>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTable Items="@_lineItems" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Include</MudTh>
+                                <MudTh>Product</MudTh>
+                                <MudTh>Invoice Qty</MudTh>
+                                <MudTh>Credit Qty</MudTh>
+                                <MudTh>Unit Price</MudTh>
+                                <MudTh>Line Total</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudCheckBox T="bool" @bind-Value="context.IsSelected" Color="Color.Primary" />
+                                </MudTd>
+                                <MudTd>
+                                    <MudText Typo="Typo.body2">@context.OriginalLineItem.Product.Name</MudText>
+                                    <MudText Typo="Typo.caption">@context.OriginalLineItem.Product.SKU</MudText>
+                                </MudTd>
+                                <MudTd>@context.OriginalLineItem.Quantity @context.OriginalLineItem.Product.UnitOfMeasure</MudTd>
+                                <MudTd>
+                                    <MudNumericField @bind-Value="context.CreditLineItem.Quantity"
+                                                    Min="0.01M"
+                                                    Max="@context.OriginalLineItem.Quantity"
+                                                    Step="0.01M"
+                                                    Format="N2"
+                                                    HideSpinButtons="true"
+                                                    @bind-Value:after="CalculateTotals"
+                                                    Disabled="@(!context.IsSelected)" />
+                                </MudTd>
+                                <MudTd>$@context.OriginalLineItem.UnitPrice.ToString("N2")</MudTd>
+                                <MudTd><strong>$@context.CreditLineItem.LineTotal.ToString("N2")</strong></MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudItem>
+
+                    <!-- Totals -->
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_creditNote.Notes"
+                                     Label="Notes (Optional)"
+                                     Lines="3" />
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudStack Spacing="2">
+                            <div class="d-flex justify-space-between">
+                                <MudText>Subtotal:</MudText>
+                                <MudText><strong>$@_creditNote.SubTotal.ToString("N2")</strong></MudText>
+                            </div>
+                            <div class="d-flex justify-space-between align-center">
+                                <MudText>Tax:</MudText>
+                                <MudNumericField @bind-Value="_creditNote.TaxAmount"
+                                                Min="0M"
+                                                Step="0.01M"
+                                                Format="N2"
+                                                Adornment="Adornment.Start"
+                                                AdornmentText="$"
+                                                HideSpinButtons="true"
+                                                @bind-Value:after="CalculateTotals"
+                                                Style="width: 150px;" />
+                            </div>
+                            <MudDivider />
+                            <div class="d-flex justify-space-between">
+                                <MudText Typo="Typo.h6">Total Credit:</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Success">$@_creditNote.TotalAmount.ToString("N2")</MudText>
+                            </div>
+                        </MudStack>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Success"
+                  Variant="Variant.Filled"
+                  OnClick="Create"
+                  Disabled="@(!_isValid || _selectedInvoice == null || !_lineItems.Any(x => x.IsSelected))">
+            Create Credit Note
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    private class CreditLineItemWrapper
+    {
+        public bool IsSelected { get; set; }
+        public OrderLineItem OriginalLineItem { get; set; } = null!;
+        public CreditNoteLineItem CreditLineItem { get; set; } = new();
+    }
+
+    private CreditNote _creditNote = new();
+    private Invoice? _selectedInvoice;
+    private List<Invoice> _invoices = new();
+    private List<CreditLineItemWrapper> _lineItems = new();
+    private DateTime? _creditNoteDate = DateTime.UtcNow;
+    private MudForm? _form;
+    private bool _isValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _invoices = await InvoiceService.GetAllInvoicesAsync();
+        _creditNote.Status = "Pending";
+    }
+
+    private async Task<IEnumerable<Invoice>> SearchInvoices(string searchText, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return _invoices.Where(i => i.Status != "Cancelled");
+
+        return _invoices.Where(i =>
+            i.Status != "Cancelled" &&
+            (i.InvoiceNumber.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            i.SalesOrder.Customer.BusinessName.Contains(searchText, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void OnInvoiceSelected()
+    {
+        _lineItems.Clear();
+
+        if (_selectedInvoice != null)
+        {
+            _creditNote.InvoiceId = _selectedInvoice.InvoiceId;
+
+            foreach (var orderLineItem in _selectedInvoice.SalesOrder.LineItems)
+            {
+                var creditLineItem = new CreditNoteLineItem
+                {
+                    ProductId = orderLineItem.ProductId,
+                    Product = orderLineItem.Product,
+                    Quantity = orderLineItem.Quantity,
+                    UnitPrice = orderLineItem.UnitPrice,
+                    DiscountAmount = orderLineItem.DiscountAmount,
+                    LineTotal = orderLineItem.LineTotal
+                };
+
+                _lineItems.Add(new CreditLineItemWrapper
+                {
+                    IsSelected = false,
+                    OriginalLineItem = orderLineItem,
+                    CreditLineItem = creditLineItem
+                });
+            }
+        }
+    }
+
+    private void CalculateTotals()
+    {
+        // Calculate line totals for selected items
+        foreach (var wrapper in _lineItems.Where(x => x.IsSelected))
+        {
+            var item = wrapper.CreditLineItem;
+            item.LineTotal = (item.UnitPrice * item.Quantity) - item.DiscountAmount;
+        }
+
+        // Calculate credit note totals
+        var selectedItems = _lineItems.Where(x => x.IsSelected).Select(x => x.CreditLineItem).ToList();
+        _creditNote.SubTotal = selectedItems.Sum(x => x.LineTotal);
+        _creditNote.TotalAmount = _creditNote.SubTotal - _creditNote.DiscountAmount + _creditNote.TaxAmount;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Create()
+    {
+        if (_selectedInvoice == null)
+        {
+            Snackbar.Add("Please select an invoice", Severity.Warning);
+            return;
+        }
+
+        var selectedItems = _lineItems.Where(x => x.IsSelected).Select(x => x.CreditLineItem).ToList();
+        if (!selectedItems.Any())
+        {
+            Snackbar.Add("Please select at least one item to credit", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _creditNote.CreditNoteDate = _creditNoteDate ?? DateTime.UtcNow;
+            _creditNote.LineItems = selectedItems;
+
+            await CreditNoteService.CreateCreditNoteAsync(_creditNote);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

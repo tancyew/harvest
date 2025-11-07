@@ -1,0 +1,369 @@
+@page "/orders/new"
+@page "/orders/{OrderId:int}/edit"
+@using Harvest.Models
+@using Harvest.Services
+@inject SalesOrderService OrderService
+@inject CustomerService CustomerService
+@inject ProductService ProductService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_isEditMode ? "Edit Order" : "Create Order") - Harvest</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4"></MudBreadcrumbs>
+
+    <MudCard Elevation="2">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">@(_isEditMode ? $"Edit Order {_order.OrderNumber}" : "Create New Order")</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudForm @ref="_form" @bind-IsValid="@_isValid">
+                <MudGrid>
+                    <!-- Customer Selection -->
+                    <MudItem xs="12" md="6">
+                        <MudAutocomplete T="Customer"
+                                        @bind-Value="_selectedCustomer"
+                                        Label="Customer"
+                                        Required="true"
+                                        SearchFunc="@SearchCustomers"
+                                        ToStringFunc="@(c => c?.BusinessName ?? "")"
+                                        Disabled="@_isEditMode"
+                                        ResetValueOnEmptyText="true"
+                                        Clearable="true" />
+                        @if (_selectedCustomer != null)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                                Contact: @_selectedCustomer.User.FullName | Credit Available: $@((_selectedCustomer.CreditLimit - _selectedCustomer.OutstandingBalance).ToString("N2"))
+                            </MudText>
+                        }
+                    </MudItem>
+
+                    <!-- Order Date -->
+                    <MudItem xs="12" md="3">
+                        <MudDatePicker @bind-Date="_orderDate"
+                                      Label="Order Date"
+                                      Required="true"
+                                      Disabled="true" />
+                    </MudItem>
+
+                    <!-- Delivery Date -->
+                    <MudItem xs="12" md="3">
+                        <MudDatePicker @bind-Date="_deliveryDate"
+                                      Label="Delivery Date (Optional)"
+                                      MinDate="DateTime.UtcNow" />
+                    </MudItem>
+
+                    <!-- Line Items Section -->
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                        <MudText Typo="Typo.h6" Class="mb-3">Order Items</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTable Items="@_lineItems" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh>Product</MudTh>
+                                <MudTh>Unit Price</MudTh>
+                                <MudTh>Quantity</MudTh>
+                                <MudTh>Discount</MudTh>
+                                <MudTh>Line Total</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Product">
+                                    <MudText Typo="Typo.body2">@context.Product.Name</MudText>
+                                    <MudText Typo="Typo.caption">@context.Product.SKU</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Unit Price">
+                                    <MudNumericField @bind-Value="context.UnitPrice"
+                                                    Min="0M"
+                                                    Step="0.01M"
+                                                    Format="N2"
+                                                    HideSpinButtons="true"
+                                                    @bind-Value:after="CalculateTotals" />
+                                </MudTd>
+                                <MudTd DataLabel="Quantity">
+                                    <MudNumericField @bind-Value="context.Quantity"
+                                                    Min="0.01M"
+                                                    Step="0.01M"
+                                                    Format="N2"
+                                                    HideSpinButtons="true"
+                                                    @bind-Value:after="CalculateTotals" />
+                                </MudTd>
+                                <MudTd DataLabel="Discount">
+                                    <MudNumericField @bind-Value="context.DiscountAmount"
+                                                    Min="0M"
+                                                    Step="0.01M"
+                                                    Format="N2"
+                                                    HideSpinButtons="true"
+                                                    @bind-Value:after="CalculateTotals" />
+                                </MudTd>
+                                <MudTd DataLabel="Line Total">
+                                    <MudText><strong>$@context.LineTotal.ToString("N2")</strong></MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Actions">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                  Color="Color.Error"
+                                                  Size="Size.Small"
+                                                  OnClick="@(() => RemoveLineItem(context))" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudItem>
+
+                    <!-- Add Product -->
+                    <MudItem xs="12">
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.Add"
+                                  OnClick="@OpenAddProductDialog">
+                            Add Product
+                        </MudButton>
+                    </MudItem>
+
+                    <!-- Totals Section -->
+                    <MudItem xs="12">
+                        <MudDivider Class="my-4" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_order.Notes"
+                                     Label="Notes (Optional)"
+                                     Lines="3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudStack Spacing="2">
+                            <div class="d-flex justify-space-between">
+                                <MudText>Subtotal:</MudText>
+                                <MudText><strong>$@_order.SubTotal.ToString("N2")</strong></MudText>
+                            </div>
+                            <div class="d-flex justify-space-between align-center">
+                                <MudText>Order Discount:</MudText>
+                                <MudNumericField @bind-Value="_order.DiscountAmount"
+                                                Min="0M"
+                                                Step="0.01M"
+                                                Format="N2"
+                                                Adornment="Adornment.Start"
+                                                AdornmentText="$"
+                                                HideSpinButtons="true"
+                                                @bind-Value:after="CalculateTotals"
+                                                Style="width: 150px;" />
+                            </div>
+                            <div class="d-flex justify-space-between align-center">
+                                <MudText>Tax:</MudText>
+                                <MudNumericField @bind-Value="_order.TaxAmount"
+                                                Min="0M"
+                                                Step="0.01M"
+                                                Format="N2"
+                                                Adornment="Adornment.Start"
+                                                AdornmentText="$"
+                                                HideSpinButtons="true"
+                                                @bind-Value:after="CalculateTotals"
+                                                Style="width: 150px;" />
+                            </div>
+                            <MudDivider />
+                            <div class="d-flex justify-space-between">
+                                <MudText Typo="Typo.h6">Total:</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Primary">$@_order.TotalAmount.ToString("N2")</MudText>
+                            </div>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Variant="Variant.Outlined" OnClick="@Cancel">Cancel</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Primary"
+                      OnClick="@Save"
+                      Disabled="@(!_isValid || !_lineItems.Any() || _selectedCustomer == null)">
+                @(_isEditMode ? "Update Order" : "Create Order")
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    [Parameter]
+    public int? OrderId { get; set; }
+
+    private SalesOrder _order = new();
+    private List<OrderLineItem> _lineItems = new();
+    private List<Customer> _customers = new();
+    private List<Product> _products = new();
+    private Customer? _selectedCustomer;
+    private DateTime? _orderDate = DateTime.UtcNow;
+    private DateTime? _deliveryDate;
+    private MudForm? _form;
+    private bool _isValid;
+    private bool _loading = true;
+    private bool _isEditMode => OrderId.HasValue && OrderId.Value > 0;
+    private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+        await LoadProducts();
+
+        if (_isEditMode)
+        {
+            await LoadOrder();
+        }
+        else
+        {
+            _order.Status = "Pending";
+            _order.OrderDate = DateTime.UtcNow;
+        }
+
+        SetupBreadcrumbs();
+        _loading = false;
+    }
+
+    private async Task LoadCustomers()
+    {
+        _customers = await CustomerService.GetAllCustomersAsync();
+    }
+
+    private async Task LoadProducts()
+    {
+        _products = await ProductService.GetAllProductsAsync();
+    }
+
+    private async Task LoadOrder()
+    {
+        if (!OrderId.HasValue) return;
+
+        var order = await OrderService.GetOrderByIdAsync(OrderId.Value);
+        if (order == null)
+        {
+            Snackbar.Add("Order not found", Severity.Error);
+            Navigation.NavigateTo("/orders");
+            return;
+        }
+
+        _order = order;
+        _lineItems = order.LineItems.ToList();
+        _selectedCustomer = order.Customer;
+        _orderDate = order.OrderDate;
+        _deliveryDate = order.DeliveryDate;
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Home", href: "/"),
+            new BreadcrumbItem("Orders", href: "/orders"),
+            new BreadcrumbItem(_isEditMode ? "Edit" : "New", href: null, disabled: true)
+        };
+    }
+
+    private async Task<IEnumerable<Customer>> SearchCustomers(string searchText, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return _customers;
+
+        return _customers.Where(c =>
+            c.BusinessName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.User.FullName.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task OpenAddProductDialog()
+    {
+        if (_selectedCustomer == null)
+        {
+            Snackbar.Add("Please select a customer first", Severity.Warning);
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<AddProductToOrderDialog>("Add Product", new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is OrderLineItem lineItem)
+        {
+            _lineItems.Add(lineItem);
+            CalculateTotals();
+        }
+    }
+
+    private void RemoveLineItem(OrderLineItem lineItem)
+    {
+        _lineItems.Remove(lineItem);
+        CalculateTotals();
+    }
+
+    private void CalculateTotals()
+    {
+        // Calculate line totals
+        foreach (var item in _lineItems)
+        {
+            item.LineTotal = (item.UnitPrice * item.Quantity) - item.DiscountAmount;
+        }
+
+        // Calculate order totals
+        _order.SubTotal = _lineItems.Sum(x => x.UnitPrice * x.Quantity);
+        _order.TotalAmount = _order.SubTotal - _order.DiscountAmount + _order.TaxAmount;
+    }
+
+    private async Task Save()
+    {
+        if (_selectedCustomer == null)
+        {
+            Snackbar.Add("Please select a customer", Severity.Warning);
+            return;
+        }
+
+        if (!_lineItems.Any())
+        {
+            Snackbar.Add("Please add at least one product", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _order.CustomerId = _selectedCustomer.CustomerId;
+            _order.OrderDate = _orderDate ?? DateTime.UtcNow;
+            _order.DeliveryDate = _deliveryDate;
+            _order.LineItems = _lineItems;
+
+            if (_isEditMode)
+            {
+                await OrderService.UpdateOrderAsync(_order);
+                Snackbar.Add("Order updated successfully!", Severity.Success);
+                Navigation.NavigateTo($"/orders/{_order.SalesOrderId}");
+            }
+            else
+            {
+                var newOrder = await OrderService.CreateOrderAsync(_order);
+                Snackbar.Add("Order created successfully!", Severity.Success);
+                Navigation.NavigateTo($"/orders/{newOrder.SalesOrderId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        if (_isEditMode)
+            Navigation.NavigateTo($"/orders/{OrderId}");
+        else
+            Navigation.NavigateTo("/orders");
+    }
+}

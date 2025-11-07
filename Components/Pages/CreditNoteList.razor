@@ -1,0 +1,181 @@
+@page "/credit-notes"
+@using Harvest.Models
+@using Harvest.Services
+@inject CreditNoteService CreditNoteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Credit Notes - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Credit Notes</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect @bind-Value="_selectedStatus"
+                          Label="Status Filter"
+                          Clearable="true"
+                          OnClearButtonClick="@(() => { _selectedStatus = null; LoadData(); })">
+                    <MudSelectItem Value="@("Pending")">Pending</MudSelectItem>
+                    <MudSelectItem Value="@("Approved")">Approved</MudSelectItem>
+                    <MudSelectItem Value="@("Applied")">Applied</MudSelectItem>
+                    <MudSelectItem Value="@("Cancelled")">Cancelled</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4" Class="d-flex align-end justify-end">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="@OpenCreateDialog">
+                    Create Credit Note
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_creditNotes"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading">
+    <HeaderContent>
+        <MudTh>Credit Note #</MudTh>
+        <MudTh>Invoice</MudTh>
+        <MudTh>Customer</MudTh>
+        <MudTh>Date</MudTh>
+        <MudTh>Amount</MudTh>
+        <MudTh>Reason</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Credit Note #">
+            <MudLink Href="@($"/credit-notes/{context.CreditNoteId}")">@context.CreditNoteNumber</MudLink>
+        </MudTd>
+        <MudTd DataLabel="Invoice">
+            <MudLink Href="@($"/invoices/{context.Invoice.InvoiceId}")">@context.Invoice.InvoiceNumber</MudLink>
+        </MudTd>
+        <MudTd DataLabel="Customer">@context.Invoice.SalesOrder.Customer.BusinessName</MudTd>
+        <MudTd DataLabel="Date">@context.CreditNoteDate.ToString("MMM dd, yyyy")</MudTd>
+        <MudTd DataLabel="Amount">
+            <MudText Color="Color.Success"><strong>$@context.TotalAmount.ToString("N2")</strong></MudText>
+        </MudTd>
+        <MudTd DataLabel="Reason">@context.Reason</MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                @context.Status
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                              Color="Color.Info"
+                              Size="Size.Small"
+                              Href="@($"/credit-notes/{context.CreditNoteId}")"
+                              Title="View Details" />
+                @if (context.Status == "Pending")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle"
+                                  Color="Color.Success"
+                                  Size="Size.Small"
+                                  OnClick="@(() => ApproveCreditNote(context))"
+                                  Title="Approve" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                  Color="Color.Error"
+                                  Size="Size.Small"
+                                  OnClick="@(() => CancelCreditNote(context))"
+                                  Title="Cancel" />
+                }
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<CreditNote> _creditNotes = new();
+    private string? _selectedStatus;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        if (!string.IsNullOrEmpty(_selectedStatus))
+        {
+            _creditNotes = await CreditNoteService.GetCreditNotesByStatusAsync(_selectedStatus);
+        }
+        else
+        {
+            _creditNotes = await CreditNoteService.GetAllCreditNotesAsync();
+        }
+
+        _loading = false;
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Pending" => Color.Warning,
+            "Approved" => Color.Info,
+            "Applied" => Color.Success,
+            "Cancelled" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var dialog = await DialogService.ShowAsync<CreditNoteDialog>("Create Credit Note", new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Credit note created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ApproveCreditNote(CreditNote creditNote)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Approval",
+            $"Are you sure you want to approve credit note {creditNote.CreditNoteNumber}?",
+            yesText: "Approve",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await CreditNoteService.ApproveCreditNoteAsync(creditNote.CreditNoteId);
+            Snackbar.Add("Credit note approved", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task CancelCreditNote(CreditNote creditNote)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Cancellation",
+            $"Are you sure you want to cancel credit note {creditNote.CreditNoteNumber}?",
+            yesText: "Cancel Credit Note",
+            cancelText: "Keep");
+
+        if (result == true)
+        {
+            await CreditNoteService.CancelCreditNoteAsync(creditNote.CreditNoteId);
+            Snackbar.Add("Credit note cancelled", Severity.Info);
+            await LoadData();
+        }
+    }
+}

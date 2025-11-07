@@ -2,6 +2,8 @@
 @using Harvest.Models
 @using Harvest.Services
 @inject CustomerService CustomerService
+@inject CustomerPricingService PricingService
+@inject ProductService ProductService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -111,6 +113,75 @@ else
                     else
                     {
                         <MudAlert Severity="Severity.Info">No orders yet</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Customer Pricing Card -->
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Customer-Specific Pricing</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                      Color="Color.Primary"
+                                      OnClick="@OpenAddPricingDialog"
+                                      Title="Add Pricing Rule" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_customer.CustomerPricings.Any())
+                    {
+                        <MudTable Items="@_customer.CustomerPricings" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Product</MudTh>
+                                <MudTh>Base Price</MudTh>
+                                <MudTh>Pricing Type</MudTh>
+                                <MudTh>Price/Discount</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudText Typo="Typo.body2">@context.Product.Name</MudText>
+                                    <MudText Typo="Typo.caption">@context.Product.SKU</MudText>
+                                </MudTd>
+                                <MudTd>$@context.Product.BasePrice.ToString("N2")</MudTd>
+                                <MudTd>
+                                    @if (context.DirectPrice.HasValue)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">Direct Price</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary">% Discount</MudChip>
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    @if (context.DirectPrice.HasValue)
+                                    {
+                                        <MudText Color="Color.Success"><strong>$@context.DirectPrice.Value.ToString("N2")</strong></MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Color="Color.Info"><strong>@context.DiscountPercentage.ToString("N2")%</strong></MudText>
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                  Color="Color.Error"
+                                                  Size="Size.Small"
+                                                  OnClick="@(() => DeletePricing(context))"
+                                                  Title="Delete" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">
+                            No custom pricing rules. This customer will use standard product prices.
+                        </MudAlert>
                     }
                 </MudCardContent>
             </MudCard>
@@ -259,6 +330,43 @@ else
         {
             await LoadCustomer();
             Snackbar.Add("Customer updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenAddPricingDialog()
+    {
+        if (_customer == null) return;
+
+        var parameters = new DialogParameters<CustomerPricingDialog>();
+        parameters.Add(x => x.CustomerId, _customer.CustomerId);
+
+        var dialog = await DialogService.ShowAsync<CustomerPricingDialog>("Add Pricing Rule", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadCustomer();
+            Snackbar.Add("Pricing rule added successfully!", Severity.Success);
+        }
+    }
+
+    private async Task DeletePricing(CustomerPricing pricing)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete the pricing rule for {pricing.Product.Name}?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await PricingService.DeleteCustomerPricingAsync(pricing.CustomerPricingId);
+            await LoadCustomer();
+            Snackbar.Add("Pricing rule deleted", Severity.Info);
         }
     }
 }

@@ -1,0 +1,338 @@
+@page "/credit-notes/{CreditNoteId:int}"
+@using Harvest.Models
+@using Harvest.Services
+@inject CreditNoteService CreditNoteService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Credit Note Details - Harvest</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_creditNote == null)
+{
+    <MudAlert Severity="Severity.Error">Credit Note not found</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/credit-notes" Class="mt-4">
+        Back to Credit Notes
+    </MudButton>
+}
+else
+{
+    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4"></MudBreadcrumbs>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <!-- Credit Note Header Card -->
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h5">Credit Note @_creditNote.CreditNoteNumber</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Related Invoice: <MudLink Href="@($"/invoices/{_creditNote.Invoice.InvoiceId}")">@_creditNote.Invoice.InvoiceNumber</MudLink>
+                        </MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudChip T="string" Color="@GetStatusColor(_creditNote.Status)">@_creditNote.Status</MudChip>
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Customer</MudText>
+                            <MudLink Href="@($"/customers/{_creditNote.Invoice.SalesOrder.Customer.CustomerId}")">
+                                <MudText Typo="Typo.body1">@_creditNote.Invoice.SalesOrder.Customer.BusinessName</MudText>
+                            </MudLink>
+                            <MudText Typo="Typo.body2">@_creditNote.Invoice.SalesOrder.Customer.User.FullName</MudText>
+                            <MudText Typo="Typo.body2">@_creditNote.Invoice.SalesOrder.Customer.User.Email</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Credit Note Details</MudText>
+                            <MudText Typo="Typo.body2">
+                                <strong>Date:</strong> @_creditNote.CreditNoteDate.ToString("MMM dd, yyyy")
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <strong>Reason:</strong> @_creditNote.Reason
+                            </MudText>
+                            @if (_creditNote.ApprovedDate.HasValue)
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Success">
+                                    <strong>Approved:</strong> @_creditNote.ApprovedDate.Value.ToString("MMM dd, yyyy")
+                                </MudText>
+                            }
+                        </MudItem>
+                        @if (!string.IsNullOrEmpty(_creditNote.Notes))
+                        {
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Notes</MudText>
+                                <MudText Typo="Typo.body2">@_creditNote.Notes</MudText>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Credit Note Items Card -->
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Credit Items</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="@_creditNote.LineItems" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Product</MudTh>
+                            <MudTh>Unit Price</MudTh>
+                            <MudTh>Quantity</MudTh>
+                            <MudTh>Discount</MudTh>
+                            <MudTh>Total</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudText Typo="Typo.body2">@context.Product.Name</MudText>
+                                <MudText Typo="Typo.caption">@context.Product.SKU</MudText>
+                            </MudTd>
+                            <MudTd>$@context.UnitPrice.ToString("N2")</MudTd>
+                            <MudTd>@context.Quantity @context.Product.UnitOfMeasure</MudTd>
+                            <MudTd>$@context.DiscountAmount.ToString("N2")</MudTd>
+                            <MudTd><strong>$@context.LineTotal.ToString("N2")</strong></MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudGrid Justify="Justify.FlexEnd">
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudStack Spacing="2">
+                                <div class="d-flex justify-space-between">
+                                    <MudText>Subtotal:</MudText>
+                                    <MudText><strong>$@_creditNote.SubTotal.ToString("N2")</strong></MudText>
+                                </div>
+                                @if (_creditNote.DiscountAmount > 0)
+                                {
+                                    <div class="d-flex justify-space-between">
+                                        <MudText>Discount:</MudText>
+                                        <MudText Color="Color.Success">-$@_creditNote.DiscountAmount.ToString("N2")</MudText>
+                                    </div>
+                                }
+                                @if (_creditNote.TaxAmount > 0)
+                                {
+                                    <div class="d-flex justify-space-between">
+                                        <MudText>Tax:</MudText>
+                                        <MudText>$@_creditNote.TaxAmount.ToString("N2")</MudText>
+                                    </div>
+                                }
+                                <MudDivider />
+                                <div class="d-flex justify-space-between">
+                                    <MudText Typo="Typo.h6">Credit Amount:</MudText>
+                                    <MudText Typo="Typo.h6" Color="Color.Success">$@_creditNote.TotalAmount.ToString("N2")</MudText>
+                                </div>
+                            </MudStack>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Actions Card -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Credit Note Actions</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        @if (_creditNote.Status == "Pending")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Success"
+                                      FullWidth="true"
+                                      StartIcon="@Icons.Material.Filled.CheckCircle"
+                                      OnClick="@ApproveCreditNote">
+                                Approve Credit Note
+                            </MudButton>
+                        }
+
+                        @if (_creditNote.Status == "Approved")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      FullWidth="true"
+                                      StartIcon="@Icons.Material.Filled.AccountBalance"
+                                      OnClick="@ApplyCreditNote">
+                                Apply to Invoice
+                            </MudButton>
+                        }
+
+                        <MudDivider Class="my-2" />
+
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                                  Disabled="true">
+                            Download PDF
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Secondary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Print"
+                                  Disabled="true">
+                            Print Credit Note
+                        </MudButton>
+
+                        @if (_creditNote.Status == "Pending")
+                        {
+                            <MudDivider Class="my-2" />
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Error"
+                                      FullWidth="true"
+                                      StartIcon="@Icons.Material.Filled.Cancel"
+                                      OnClick="@CancelCreditNote">
+                                Cancel Credit Note
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Related Documents Card -->
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Related Documents</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Text"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Receipt"
+                                  Href="@($"/invoices/{_creditNote.Invoice.InvoiceId}")">
+                            View Invoice
+                        </MudButton>
+                        <MudButton Variant="Variant.Text"
+                                  Color="Color.Secondary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.ShoppingBag"
+                                  Href="@($"/orders/{_creditNote.Invoice.SalesOrder.SalesOrderId}")">
+                            View Sales Order
+                        </MudButton>
+                        <MudButton Variant="Variant.Text"
+                                  Color="Color.Info"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Person"
+                                  Href="@($"/customers/{_creditNote.Invoice.SalesOrder.Customer.CustomerId}")">
+                            View Customer
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public int CreditNoteId { get; set; }
+
+    private CreditNote? _creditNote;
+    private bool _loading = true;
+    private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCreditNote();
+        SetupBreadcrumbs();
+    }
+
+    private async Task LoadCreditNote()
+    {
+        _loading = true;
+        _creditNote = await CreditNoteService.GetCreditNoteByIdAsync(CreditNoteId);
+        _loading = false;
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Home", href: "/"),
+            new BreadcrumbItem("Credit Notes", href: "/credit-notes"),
+            new BreadcrumbItem(_creditNote?.CreditNoteNumber ?? "Details", href: null, disabled: true)
+        };
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Pending" => Color.Warning,
+            "Approved" => Color.Info,
+            "Applied" => Color.Success,
+            "Cancelled" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private async Task ApproveCreditNote()
+    {
+        if (_creditNote == null) return;
+
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Approval",
+            "Are you sure you want to approve this credit note?",
+            yesText: "Approve",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await CreditNoteService.ApproveCreditNoteAsync(_creditNote.CreditNoteId);
+            Snackbar.Add("Credit note approved successfully!", Severity.Success);
+            await LoadCreditNote();
+            SetupBreadcrumbs();
+        }
+    }
+
+    private async Task ApplyCreditNote()
+    {
+        if (_creditNote == null) return;
+
+        try
+        {
+            await CreditNoteService.ApplyCreditNoteAsync(_creditNote.CreditNoteId);
+            Snackbar.Add("Credit note applied to invoice successfully!", Severity.Success);
+            await LoadCreditNote();
+            SetupBreadcrumbs();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CancelCreditNote()
+    {
+        if (_creditNote == null) return;
+
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Cancellation",
+            "Are you sure you want to cancel this credit note? This action cannot be undone.",
+            yesText: "Cancel Credit Note",
+            cancelText: "Keep");
+
+        if (result == true)
+        {
+            await CreditNoteService.CancelCreditNoteAsync(_creditNote.CreditNoteId);
+            Snackbar.Add("Credit note cancelled", Severity.Info);
+            await LoadCreditNote();
+        }
+    }
+}

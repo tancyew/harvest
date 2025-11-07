@@ -1,0 +1,140 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject ProductService ProductService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudAutocomplete T="Product"
+                                    @bind-Value="_selectedProduct"
+                                    Label="Product"
+                                    Required="true"
+                                    SearchFunc="@SearchProducts"
+                                    ToStringFunc="@(p => p != null ? $"{p.Name} ({p.SKU})" : "")"
+                                    ResetValueOnEmptyText="true"
+                                    Clearable="true"
+                                    @bind-Value:after="OnProductSelected" />
+                    @if (_selectedProduct != null)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            Base Price: $@_selectedProduct.BasePrice.ToString("N2") per @_selectedProduct.UnitOfMeasure
+                            @if (_selectedProduct.Inventory != null)
+                            {
+                                <br />Available Stock: @_selectedProduct.Inventory.QuantityAvailable.ToString("N2") @_selectedProduct.UnitOfMeasure
+                            }
+                        </MudAlert>
+                    }
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_lineItem.UnitPrice"
+                                    Label="Unit Price"
+                                    Required="true"
+                                    Min="0M"
+                                    Step="0.01M"
+                                    Format="N2"
+                                    Adornment="Adornment.Start"
+                                    AdornmentText="$"
+                                    @bind-Value:after="CalculateLineTotal" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_lineItem.Quantity"
+                                    Label="Quantity"
+                                    Required="true"
+                                    Min="0.01M"
+                                    Step="0.01M"
+                                    Format="N2"
+                                    @bind-Value:after="CalculateLineTotal" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_lineItem.DiscountAmount"
+                                    Label="Discount Amount"
+                                    Min="0M"
+                                    Step="0.01M"
+                                    Format="N2"
+                                    Adornment="Adornment.Start"
+                                    AdornmentText="$"
+                                    @bind-Value:after="CalculateLineTotal" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Value="@_lineItem.LineTotal.ToString("C2")"
+                                 Label="Line Total"
+                                 ReadOnly="true"
+                                 Variant="Variant.Filled" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Success"
+                  Variant="Variant.Filled"
+                  OnClick="Add"
+                  Disabled="@(!_isValid || _selectedProduct == null)">
+            Add to Order
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    private OrderLineItem _lineItem = new();
+    private Product? _selectedProduct;
+    private List<Product> _products = new();
+    private MudForm? _form;
+    private bool _isValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _products = await ProductService.GetActiveProductsAsync();
+    }
+
+    private async Task<IEnumerable<Product>> SearchProducts(string searchText, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return _products;
+
+        return _products.Where(p =>
+            p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            p.SKU.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnProductSelected()
+    {
+        if (_selectedProduct != null)
+        {
+            _lineItem.ProductId = _selectedProduct.ProductId;
+            _lineItem.Product = _selectedProduct;
+            _lineItem.UnitPrice = _selectedProduct.BasePrice;
+            _lineItem.Quantity = 1;
+            _lineItem.DiscountAmount = 0;
+            CalculateLineTotal();
+        }
+    }
+
+    private void CalculateLineTotal()
+    {
+        _lineItem.LineTotal = (_lineItem.UnitPrice * _lineItem.Quantity) - _lineItem.DiscountAmount;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Add()
+    {
+        if (_selectedProduct == null)
+        {
+            Snackbar.Add("Please select a product", Severity.Warning);
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(_lineItem));
+    }
+}
