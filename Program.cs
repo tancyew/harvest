@@ -21,6 +21,12 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<JournalService>();
+builder.Services.AddScoped<CustomerService>();
+builder.Services.AddScoped<SalesOrderService>();
+builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<PaymentService>();
+builder.Services.AddScoped<CreditNoteService>();
+builder.Services.AddScoped<CustomerPricingService>();
 
 var app = builder.Build();
 
