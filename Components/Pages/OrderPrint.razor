@@ -1,0 +1,369 @@
+@page "/print/order/{OrderId:int}"
+@using Harvest.Models
+@using Harvest.Services
+@inject SalesOrderService OrderService
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Sales Order @_order?.OrderNumber</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #4caf50;
+            padding-bottom: 20px;
+        }
+
+        .company-info h1 {
+            color: #4caf50;
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        .company-info p {
+            color: #666;
+            margin: 2px 0;
+        }
+
+        .order-info {
+            text-align: right;
+        }
+
+        .order-info h2 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .order-info p {
+            margin: 5px 0;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        .status-completed {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-confirmed {
+            background: #2196f3;
+            color: white;
+        }
+
+        .status-pending {
+            background: #ff9800;
+            color: white;
+        }
+
+        .status-cancelled {
+            background: #f44336;
+            color: white;
+        }
+
+        .addresses {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .address-box {
+            width: 48%;
+        }
+
+        .address-box h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #4caf50;
+            text-transform: uppercase;
+        }
+
+        .address-box p {
+            margin: 3px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        thead {
+            background: #4caf50;
+            color: white;
+        }
+
+        th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        th.text-right, td.text-right {
+            text-align: right;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+        .totals {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .totals-box {
+            width: 300px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+
+        .totals-row.total {
+            font-size: 16px;
+            font-weight: bold;
+            border-top: 2px solid #333;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+        }
+
+        .notes {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-left: 4px solid #4caf50;
+        }
+
+        .notes h3 {
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .item-description {
+            color: #666;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        @@media print {
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    @if (_order != null)
+    {
+        <!-- Header -->
+        <div class="header">
+            <div class="company-info">
+                <h1>HARVEST</h1>
+                <p>Fresh Produce Direct from Farm</p>
+                <p>Email: info@harvest.com</p>
+                <p>Phone: +60 12-345 6789</p>
+            </div>
+            <div class="order-info">
+                <h2>SALES ORDER</h2>
+                <p><strong>Order #:</strong> @_order.OrderNumber</p>
+                <p><strong>Order Date:</strong> @_order.OrderDate.ToString("MMM dd, yyyy")</p>
+                @if (_order.DeliveryDate.HasValue)
+                {
+                    <p><strong>Delivery Date:</strong> @_order.DeliveryDate.Value.ToString("MMM dd, yyyy")</p>
+                }
+                <p style="margin-top: 10px;">
+                    <span class="status-badge @GetStatusClass(_order.Status)">@_order.Status</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Addresses -->
+        <div class="addresses">
+            <div class="address-box">
+                <h3>Customer Information:</h3>
+                <p><strong>@_order.Customer.BusinessName</strong></p>
+                <p>@_order.Customer.User.FullName</p>
+                <p>@_order.Customer.Address</p>
+                <p>@_order.Customer.City @_order.Customer.PostalCode</p>
+                <p>@_order.Customer.Country</p>
+                <p>Email: @_order.Customer.User.Email</p>
+                <p>Phone: @_order.Customer.User.Phone</p>
+            </div>
+            <div class="address-box">
+                <h3>Delivery Information:</h3>
+                @if (_order.DeliveryDate.HasValue)
+                {
+                    <p><strong>Expected Delivery:</strong> @_order.DeliveryDate.Value.ToString("MMM dd, yyyy")</p>
+                }
+                @if (!string.IsNullOrEmpty(_order.DeliveryAddress))
+                {
+                    <p><strong>Delivery Address:</strong></p>
+                    <p>@_order.DeliveryAddress</p>
+                }
+                else
+                {
+                    <p><strong>Delivery Address:</strong></p>
+                    <p>Same as customer address</p>
+                }
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%">#</th>
+                    <th style="width: 40%">Item Description</th>
+                    <th class="text-right" style="width: 15%">Unit Price</th>
+                    <th class="text-right" style="width: 15%">Quantity</th>
+                    <th class="text-right" style="width: 10%">Discount</th>
+                    <th class="text-right" style="width: 15%">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    int lineNumber = 1;
+                }
+                @foreach (var item in _order.LineItems)
+                {
+                    <tr>
+                        <td>@lineNumber</td>
+                        <td>
+                            <strong>@item.Product.Name</strong>
+                            <div class="item-description">SKU: @item.Product.SKU</div>
+                            @if (!string.IsNullOrEmpty(item.Product.Description))
+                            {
+                                <div class="item-description">@item.Product.Description</div>
+                            }
+                        </td>
+                        <td class="text-right">$@item.UnitPrice.ToString("N2")</td>
+                        <td class="text-right">@item.Quantity @item.Product.UnitOfMeasure</td>
+                        <td class="text-right">$@item.DiscountAmount.ToString("N2")</td>
+                        <td class="text-right"><strong>$@item.LineTotal.ToString("N2")</strong></td>
+                    </tr>
+                    lineNumber++;
+                }
+            </tbody>
+        </table>
+
+        <!-- Totals -->
+        <div class="totals">
+            <div class="totals-box">
+                <div class="totals-row">
+                    <span>Subtotal:</span>
+                    <span>$@_order.SubTotal.ToString("N2")</span>
+                </div>
+                @if (_order.DiscountAmount > 0)
+                {
+                    <div class="totals-row">
+                        <span>Discount:</span>
+                        <span>-$@_order.DiscountAmount.ToString("N2")</span>
+                    </div>
+                }
+                @if (_order.TaxAmount > 0)
+                {
+                    <div class="totals-row">
+                        <span>Tax:</span>
+                        <span>$@_order.TaxAmount.ToString("N2")</span>
+                    </div>
+                }
+                <div class="totals-row total">
+                    <span>Order Total:</span>
+                    <span>$@_order.TotalAmount.ToString("N2")</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        @if (!string.IsNullOrEmpty(_order.Notes))
+        {
+            <div class="notes">
+                <h3>Order Notes</h3>
+                <p>@_order.Notes</p>
+            </div>
+        }
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Thank you for your order!</p>
+            <p style="margin-top: 5px;">This is a computer-generated order confirmation and does not require a signature.</p>
+            <p style="margin-top: 10px;">Harvest Platform | www.harvest.com | info@harvest.com</p>
+        </div>
+    }
+    else
+    {
+        <div style="text-align: center; padding: 50px;">
+            <h2>Order not found</h2>
+        </div>
+    }
+</body>
+</html>
+
+@code {
+    [Parameter]
+    public int OrderId { get; set; }
+
+    private SalesOrder? _order;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _order = await OrderService.GetOrderByIdAsync(OrderId);
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "status-completed",
+            "Confirmed" => "status-confirmed",
+            "Pending" => "status-pending",
+            "Cancelled" => "status-cancelled",
+            _ => "status-pending"
+        };
+    }
+}

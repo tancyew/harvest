@@ -1,0 +1,386 @@
+@page "/print/invoice/{InvoiceId:int}"
+@using Harvest.Models
+@using Harvest.Services
+@inject InvoiceService InvoiceService
+@inject NavigationManager Navigation
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Invoice @_invoice?.InvoiceNumber</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 20px;
+        }
+
+        .company-info h1 {
+            color: #667eea;
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        .company-info p {
+            color: #666;
+            margin: 2px 0;
+        }
+
+        .invoice-info {
+            text-align: right;
+        }
+
+        .invoice-info h2 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .invoice-info p {
+            margin: 5px 0;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        .status-paid {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-sent {
+            background: #2196f3;
+            color: white;
+        }
+
+        .status-draft {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .status-overdue {
+            background: #f44336;
+            color: white;
+        }
+
+        .addresses {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .address-box {
+            width: 48%;
+        }
+
+        .address-box h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #667eea;
+            text-transform: uppercase;
+        }
+
+        .address-box p {
+            margin: 3px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        thead {
+            background: #667eea;
+            color: white;
+        }
+
+        th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        th.text-right, td.text-right {
+            text-align: right;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+        .totals {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .totals-box {
+            width: 300px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+
+        .totals-row.total {
+            font-size: 16px;
+            font-weight: bold;
+            border-top: 2px solid #333;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+
+        .totals-row.balance {
+            font-size: 18px;
+            font-weight: bold;
+            color: #f44336;
+            border-top: 2px solid #f44336;
+            margin-top: 5px;
+            padding-top: 10px;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+        }
+
+        .payment-terms {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-left: 4px solid #667eea;
+        }
+
+        .payment-terms h3 {
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .item-description {
+            color: #666;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        @@media print {
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    @if (_invoice != null)
+    {
+        <!-- Header -->
+        <div class="header">
+            <div class="company-info">
+                <h1>HARVEST</h1>
+                <p>Fresh Produce Direct from Farm</p>
+                <p>Email: info@harvest.com</p>
+                <p>Phone: +60 12-345 6789</p>
+            </div>
+            <div class="invoice-info">
+                <h2>INVOICE</h2>
+                <p><strong>Invoice #:</strong> @_invoice.InvoiceNumber</p>
+                <p><strong>Date:</strong> @_invoice.InvoiceDate.ToString("MMM dd, yyyy")</p>
+                <p><strong>Due Date:</strong> @_invoice.DueDate.ToString("MMM dd, yyyy")</p>
+                <p style="margin-top: 10px;">
+                    <span class="status-badge @GetStatusClass(_invoice.Status)">@_invoice.Status</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Addresses -->
+        <div class="addresses">
+            <div class="address-box">
+                <h3>Bill To:</h3>
+                <p><strong>@_invoice.SalesOrder.Customer.BusinessName</strong></p>
+                <p>@_invoice.SalesOrder.Customer.User.FullName</p>
+                <p>@_invoice.SalesOrder.Customer.Address</p>
+                <p>@_invoice.SalesOrder.Customer.City @_invoice.SalesOrder.Customer.PostalCode</p>
+                <p>@_invoice.SalesOrder.Customer.Country</p>
+                <p>Email: @_invoice.SalesOrder.Customer.User.Email</p>
+                <p>Phone: @_invoice.SalesOrder.Customer.User.Phone</p>
+            </div>
+            <div class="address-box">
+                <h3>Invoice Details:</h3>
+                <p><strong>Order #:</strong> @_invoice.SalesOrder.OrderNumber</p>
+                <p><strong>Order Date:</strong> @_invoice.SalesOrder.OrderDate.ToString("MMM dd, yyyy")</p>
+                @if (_invoice.SalesOrder.DeliveryDate.HasValue)
+                {
+                    <p><strong>Delivery Date:</strong> @_invoice.SalesOrder.DeliveryDate.Value.ToString("MMM dd, yyyy")</p>
+                }
+                @if (!string.IsNullOrEmpty(_invoice.SalesOrder.Customer.TaxId))
+                {
+                    <p><strong>Tax ID:</strong> @_invoice.SalesOrder.Customer.TaxId</p>
+                }
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%">#</th>
+                    <th style="width: 40%">Item Description</th>
+                    <th class="text-right" style="width: 15%">Unit Price</th>
+                    <th class="text-right" style="width: 15%">Quantity</th>
+                    <th class="text-right" style="width: 10%">Discount</th>
+                    <th class="text-right" style="width: 15%">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    int lineNumber = 1;
+                }
+                @foreach (var item in _invoice.SalesOrder.LineItems)
+                {
+                    <tr>
+                        <td>@lineNumber</td>
+                        <td>
+                            <strong>@item.Product.Name</strong>
+                            <div class="item-description">SKU: @item.Product.SKU</div>
+                            @if (!string.IsNullOrEmpty(item.Product.Description))
+                            {
+                                <div class="item-description">@item.Product.Description</div>
+                            }
+                        </td>
+                        <td class="text-right">$@item.UnitPrice.ToString("N2")</td>
+                        <td class="text-right">@item.Quantity @item.Product.UnitOfMeasure</td>
+                        <td class="text-right">$@item.DiscountAmount.ToString("N2")</td>
+                        <td class="text-right"><strong>$@item.LineTotal.ToString("N2")</strong></td>
+                    </tr>
+                    lineNumber++;
+                }
+            </tbody>
+        </table>
+
+        <!-- Totals -->
+        <div class="totals">
+            <div class="totals-box">
+                <div class="totals-row">
+                    <span>Subtotal:</span>
+                    <span>$@_invoice.SalesOrder.SubTotal.ToString("N2")</span>
+                </div>
+                @if (_invoice.SalesOrder.DiscountAmount > 0)
+                {
+                    <div class="totals-row">
+                        <span>Discount:</span>
+                        <span>-$@_invoice.SalesOrder.DiscountAmount.ToString("N2")</span>
+                    </div>
+                }
+                @if (_invoice.SalesOrder.TaxAmount > 0)
+                {
+                    <div class="totals-row">
+                        <span>Tax:</span>
+                        <span>$@_invoice.SalesOrder.TaxAmount.ToString("N2")</span>
+                    </div>
+                }
+                <div class="totals-row total">
+                    <span>Invoice Total:</span>
+                    <span>$@_invoice.TotalAmount.ToString("N2")</span>
+                </div>
+                @if (_invoice.PaidAmount > 0)
+                {
+                    <div class="totals-row">
+                        <span>Amount Paid:</span>
+                        <span style="color: #4caf50;">-$@_invoice.PaidAmount.ToString("N2")</span>
+                    </div>
+                }
+                @if (_invoice.BalanceAmount > 0)
+                {
+                    <div class="totals-row balance">
+                        <span>Balance Due:</span>
+                        <span>$@_invoice.BalanceAmount.ToString("N2")</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Payment Terms -->
+        @if (!string.IsNullOrEmpty(_invoice.PaymentTerms))
+        {
+            <div class="payment-terms">
+                <h3>Payment Terms</h3>
+                <p>@_invoice.PaymentTerms</p>
+            </div>
+        }
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Thank you for your business!</p>
+            <p style="margin-top: 5px;">This is a computer-generated invoice and does not require a signature.</p>
+            <p style="margin-top: 10px;">Harvest Platform | www.harvest.com | info@harvest.com</p>
+        </div>
+    }
+    else
+    {
+        <div style="text-align: center; padding: 50px;">
+            <h2>Invoice not found</h2>
+        </div>
+    }
+</body>
+</html>
+
+@code {
+    [Parameter]
+    public int InvoiceId { get; set; }
+
+    private Invoice? _invoice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _invoice = await InvoiceService.GetInvoiceByIdAsync(InvoiceId);
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Paid" => "status-paid",
+            "Sent" => "status-sent",
+            "Draft" => "status-draft",
+            "Overdue" => "status-overdue",
+            _ => "status-draft"
+        };
+    }
+}

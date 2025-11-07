@@ -1,0 +1,258 @@
+@page "/login"
+@using Harvest.Services
+@using Harvest.Models
+@inject AuthService AuthService
+@inject SessionService SessionService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Login - Harvest</PageTitle>
+
+<div class="login-container">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+        <MudPaper Elevation="3" Class="pa-6">
+            <!-- Logo/Header -->
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Agriculture" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h4" Class="mt-2">Harvest</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Direct from Farm to You</MudText>
+            </div>
+
+            @if (!_otpSent)
+            {
+                <!-- Step 1: Enter Email/Phone -->
+                <MudForm @ref="_form" @bind-IsValid="@_isValid">
+                    <MudText Typo="Typo.h6" Class="mb-4">Sign In</MudText>
+
+                    <MudTextField @bind-Value="_emailOrPhone"
+                                  Label="Email or Phone Number"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  RequiredError="Email or phone is required"
+                                  HelperText="Enter your registered email or phone number"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Person"
+                                  Class="mb-4" />
+
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              Size="Size.Large"
+                              OnClick="RequestOtp"
+                              Disabled="@_loading"
+                              Class="mb-3">
+                        @if (_loading)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span class="ml-2">Sending OTP...</span>
+                        }
+                        else
+                        {
+                            <span>Request OTP</span>
+                        }
+                    </MudButton>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">
+                        Don't have an account?
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              Href="/register"
+                              Class="mt-2">
+                        Register Now
+                    </MudButton>
+                </MudForm>
+            }
+            else
+            {
+                <!-- Step 2: Enter OTP -->
+                <MudForm @ref="_otpForm" @bind-IsValid="@_isOtpValid">
+                    <MudText Typo="Typo.h6" Class="mb-2">Enter OTP</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        We've sent a verification code to <strong>@_emailOrPhone</strong>
+                    </MudText>
+
+                    <MudTextField @bind-Value="_otpCode"
+                                  Label="OTP Code"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  RequiredError="OTP code is required"
+                                  InputType="InputType.Number"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Lock"
+                                  Class="mb-4"
+                                  MaxLength="6"
+                                  HelperText="Enter the 6-digit code" />
+
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Success"
+                              FullWidth="true"
+                              Size="Size.Large"
+                              OnClick="VerifyOtp"
+                              Disabled="@_loading"
+                              Class="mb-3">
+                        @if (_loading)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span class="ml-2">Verifying...</span>
+                        }
+                        else
+                        {
+                            <span>Verify & Login</span>
+                        }
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Secondary"
+                              FullWidth="true"
+                              OnClick="ResetForm"
+                              Disabled="@_loading">
+                        Back to Login
+                    </MudButton>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary" Class="mb-2">
+                        Didn't receive the code?
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              OnClick="RequestOtp"
+                              Disabled="@_loading">
+                        Resend OTP
+                    </MudButton>
+                </MudForm>
+            }
+        </MudPaper>
+
+        <!-- Info Section -->
+        <MudPaper Elevation="1" Class="pa-4 mt-4">
+            <MudText Typo="Typo.body2" Align="Align.Center">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+                Demo Mode: Use OTP code <strong>123456</strong> for testing
+            </MudText>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+<style>
+    .login-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        padding: 20px 0;
+    }
+
+    @@media (max-width: 600px) {
+        .login-container {
+            padding: 10px;
+        }
+    }
+</style>
+
+@code {
+    private MudForm? _form;
+    private MudForm? _otpForm;
+    private bool _isValid;
+    private bool _isOtpValid;
+    private bool _loading;
+    private bool _otpSent;
+
+    private string _emailOrPhone = string.Empty;
+    private string _otpCode = string.Empty;
+
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if already logged in
+        var isAuthenticated = await SessionService.IsAuthenticatedAsync();
+        if (isAuthenticated)
+        {
+            Navigation.NavigateTo(ReturnUrl ?? "/shop");
+        }
+    }
+
+    private async Task RequestOtp()
+    {
+        if (_form != null)
+        {
+            await _form.Validate();
+            if (!_isValid) return;
+        }
+
+        _loading = true;
+        StateHasChanged();
+
+        var result = await AuthService.RequestOtpAsync(_emailOrPhone);
+
+        _loading = false;
+
+        if (result.Success)
+        {
+            _otpSent = true;
+            Snackbar.Add(result.Message, Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task VerifyOtp()
+    {
+        if (_otpForm != null)
+        {
+            await _otpForm.Validate();
+            if (!_isOtpValid) return;
+        }
+
+        _loading = true;
+        StateHasChanged();
+
+        var result = await AuthService.VerifyOtpAsync(_emailOrPhone, _otpCode);
+
+        _loading = false;
+
+        if (result.Success && result.User != null)
+        {
+            await SessionService.SetCurrentUserAsync(result.User);
+            Snackbar.Add($"Welcome back, {result.User.FullName}!", Severity.Success);
+
+            // Redirect based on user role
+            if (result.User.Role == "Customer")
+            {
+                Navigation.NavigateTo(ReturnUrl ?? "/shop");
+            }
+            else if (result.User.Role == "Admin")
+            {
+                Navigation.NavigateTo(ReturnUrl ?? "/");
+            }
+            else
+            {
+                Navigation.NavigateTo(ReturnUrl ?? "/");
+            }
+        }
+        else
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ResetForm()
+    {
+        _otpSent = false;
+        _otpCode = string.Empty;
+        _loading = false;
+    }
+}

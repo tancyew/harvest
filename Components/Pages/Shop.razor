@@ -1,0 +1,426 @@
+@page "/shop"
+@using Harvest.Models
+@using Harvest.Services
+@inject ProductService ProductService
+@inject CustomerPricingService CustomerPricingService
+@inject SessionService SessionService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Shop - Harvest</PageTitle>
+
+@if (!_isAuthenticated)
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+        <MudPaper Class="pa-6 text-center">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h5" Class="mt-4">Please Login</MudText>
+            <MudText Typo="Typo.body1" Class="mt-2 mb-4">
+                You need to be logged in to shop for products
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login?returnUrl=/shop">
+                Login Now
+            </MudButton>
+        </MudPaper>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="pa-2">
+        <!-- Header with Cart Badge -->
+        <MudPaper Elevation="2" Class="pa-4 mb-3">
+            <div class="d-flex justify-space-between align-center">
+                <div>
+                    <MudText Typo="Typo.h5">Welcome, @_currentUser?.FullName</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@_currentUser?.Customer?.BusinessName</MudText>
+                </div>
+                <MudBadge Content="@_cart.Count" Color="Color.Primary" Overlap="true" Visible="@(_cart.Count > 0)">
+                    <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.ShoppingCart" OnClick="@(() => _showCart = true)" />
+                </MudBadge>
+            </div>
+        </MudPaper>
+
+        <!-- Search and Filter -->
+        <MudPaper Elevation="1" Class="pa-3 mb-3">
+            <MudTextField @bind-Value="_searchTerm"
+                          Label="Search products"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          OnKeyUp="SearchProducts"
+                          Immediate="true"
+                          Margin="Margin.Dense" />
+
+            <MudChipSet @bind-SelectedChip="_selectedCategory" Filter="true" Class="mt-2">
+                <MudChip Text="All" Value="null" Default="true" OnClick="FilterByCategory">All</MudChip>
+                @foreach (var category in _categories)
+                {
+                    <MudChip Text="@category" Value="@category" OnClick="FilterByCategory">@category</MudChip>
+                }
+            </MudChipSet>
+        </MudPaper>
+
+        <!-- Product Grid -->
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (!_filteredProducts.Any())
+        {
+            <MudPaper Class="pa-6 text-center">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.h6" Class="mt-4">No products found</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid Spacing="2">
+                @foreach (var product in _filteredProducts)
+                {
+                    var price = GetProductPrice(product);
+                    var hasDiscount = price < product.BasePrice;
+                    var inStock = product.Inventory?.QuantityAvailable > 0;
+
+                    <MudItem xs="6" sm="4" md="3">
+                        <MudCard Elevation="2" Class="product-card">
+                            <MudCardMedia Image="@GetProductImage(product)" Height="150" />
+                            <MudCardContent Class="pa-2">
+                                <MudText Typo="Typo.body1" Class="product-name">@product.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@product.SKU</MudText>
+
+                                <div class="mt-2">
+                                    @if (hasDiscount)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="text-decoration: line-through" Color="Color.Secondary">
+                                            $@product.BasePrice.ToString("N2")
+                                        </MudText>
+                                        <MudText Typo="Typo.h6" Color="Color.Success">
+                                            $@price.ToString("N2")
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.h6" Color="Color.Primary">
+                                            $@price.ToString("N2")
+                                        </MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">per @product.UnitOfMeasure</MudText>
+                                </div>
+
+                                @if (inStock)
+                                {
+                                    <MudChip Size="Size.Small" Color="Color.Success" Class="mt-1">
+                                        @product.Inventory!.QuantityAvailable @product.UnitOfMeasure available
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip Size="Size.Small" Color="Color.Error" Class="mt-1">Out of Stock</MudChip>
+                                }
+                            </MudCardContent>
+                            <MudCardActions Class="pa-2">
+                                @if (inStock)
+                                {
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Primary"
+                                              Size="Size.Small"
+                                              FullWidth="true"
+                                              OnClick="@(() => AddToCart(product, price))">
+                                        Add to Cart
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Default"
+                                              Size="Size.Small"
+                                              FullWidth="true"
+                                              Disabled="true">
+                                        Out of Stock
+                                    </MudButton>
+                                }
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudContainer>
+
+    <!-- Cart Drawer -->
+    <MudDrawer @bind-Open="_showCart" Anchor="Anchor.Right" Elevation="2" Variant="DrawerVariant.Temporary">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Shopping Cart</MudText>
+        </MudDrawerHeader>
+        <MudDivider />
+        <MudDrawerContent Class="pa-3">
+            @if (!_cart.Any())
+            {
+                <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-4">
+                    Your cart is empty
+                </MudText>
+            }
+            else
+            {
+                @foreach (var item in _cart)
+                {
+                    <MudCard Elevation="1" Class="mb-2">
+                        <MudCardContent Class="pa-2">
+                            <MudText Typo="Typo.body1">@item.ProductName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">$@item.UnitPrice.ToString("N2") per @item.UnitOfMeasure</MudText>
+
+                            <div class="d-flex align-center justify-space-between mt-2">
+                                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Remove" OnClick="@(() => DecreaseQuantity(item))" />
+                                    <MudButton>@item.Quantity</MudButton>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" OnClick="@(() => IncreaseQuantity(item))" />
+                                </MudButtonGroup>
+                                <MudText Typo="Typo.body1"><strong>$@item.LineTotal.ToString("N2")</strong></MudText>
+                            </div>
+                        </MudCardContent>
+                        <MudCardActions Class="pa-2">
+                            <MudButton Size="Size.Small"
+                                      Color="Color.Error"
+                                      StartIcon="@Icons.Material.Filled.Delete"
+                                      OnClick="@(() => RemoveFromCart(item))">
+                                Remove
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                }
+
+                <MudDivider Class="my-3" />
+
+                <div class="pa-2">
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body1">Subtotal:</MudText>
+                        <MudText Typo="Typo.body1"><strong>$@GetCartSubtotal().ToString("N2")</strong></MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Tax (0%):</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">$0.00</MudText>
+                    </div>
+                    <MudDivider Class="my-2" />
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.h6">Total:</MudText>
+                        <MudText Typo="Typo.h6" Color="Color.Primary">$@GetCartSubtotal().ToString("N2")</MudText>
+                    </div>
+                </div>
+
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Success"
+                          FullWidth="true"
+                          Size="Size.Large"
+                          StartIcon="@Icons.Material.Filled.ShoppingCart"
+                          OnClick="CreateOrder"
+                          Class="mt-4">
+                    Place Order
+                </MudButton>
+
+                <MudButton Variant="Variant.Text"
+                          Color="Color.Secondary"
+                          FullWidth="true"
+                          OnClick="ClearCart"
+                          Class="mt-2">
+                    Clear Cart
+                </MudButton>
+            }
+        </MudDrawerContent>
+    </MudDrawer>
+}
+
+<style>
+    .product-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .product-card .mud-card-content {
+        flex-grow: 1;
+    }
+
+    .product-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        min-height: 2.5em;
+    }
+</style>
+
+@code {
+    private bool _isAuthenticated;
+    private User? _currentUser;
+    private List<Product> _products = new();
+    private List<Product> _filteredProducts = new();
+    private List<string> _categories = new();
+    private Dictionary<int, decimal> _customerPrices = new();
+    private List<CartItem> _cart = new();
+    private bool _loading = true;
+    private bool _showCart = false;
+    private string _searchTerm = string.Empty;
+    private MudChip? _selectedCategory;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isAuthenticated = await SessionService.IsAuthenticatedAsync();
+        if (!_isAuthenticated)
+        {
+            return;
+        }
+
+        _currentUser = await SessionService.GetCurrentUserAsync();
+        await LoadProducts();
+        await LoadCustomerPricing();
+        _loading = false;
+    }
+
+    private async Task LoadProducts()
+    {
+        _products = await ProductService.GetActiveProductsAsync();
+        _filteredProducts = _products;
+        _categories = await ProductService.GetCategoriesAsync();
+    }
+
+    private async Task LoadCustomerPricing()
+    {
+        if (_currentUser?.Customer == null) return;
+
+        var pricingList = await CustomerPricingService.GetCustomerPricingAsync(_currentUser.Customer.CustomerId);
+        _customerPrices = pricingList.ToDictionary(p => p.ProductId, p => CustomerPricingService.CalculatePrice(p));
+    }
+
+    private decimal GetProductPrice(Product product)
+    {
+        if (_customerPrices.TryGetValue(product.ProductId, out var price))
+        {
+            return price;
+        }
+        return product.BasePrice;
+    }
+
+    private string GetProductImage(Product product)
+    {
+        var primaryImage = product.Images?.FirstOrDefault(i => i.IsPrimary)
+                          ?? product.Images?.FirstOrDefault();
+
+        return primaryImage?.ImageUrl ?? "/images/products/placeholder.jpg";
+    }
+
+    private void AddToCart(Product product, decimal price)
+    {
+        var existingItem = _cart.FirstOrDefault(c => c.ProductId == product.ProductId);
+        if (existingItem != null)
+        {
+            existingItem.Quantity++;
+            existingItem.LineTotal = existingItem.Quantity * existingItem.UnitPrice;
+        }
+        else
+        {
+            _cart.Add(new CartItem
+            {
+                ProductId = product.ProductId,
+                ProductName = product.Name,
+                SKU = product.SKU,
+                UnitOfMeasure = product.UnitOfMeasure,
+                UnitPrice = price,
+                Quantity = 1,
+                LineTotal = price
+            });
+        }
+
+        Snackbar.Add($"{product.Name} added to cart", Severity.Success);
+    }
+
+    private void IncreaseQuantity(CartItem item)
+    {
+        item.Quantity++;
+        item.LineTotal = item.Quantity * item.UnitPrice;
+    }
+
+    private void DecreaseQuantity(CartItem item)
+    {
+        if (item.Quantity > 1)
+        {
+            item.Quantity--;
+            item.LineTotal = item.Quantity * item.UnitPrice;
+        }
+    }
+
+    private void RemoveFromCart(CartItem item)
+    {
+        _cart.Remove(item);
+        Snackbar.Add($"{item.ProductName} removed from cart", Severity.Info);
+    }
+
+    private void ClearCart()
+    {
+        _cart.Clear();
+        Snackbar.Add("Cart cleared", Severity.Info);
+    }
+
+    private decimal GetCartSubtotal()
+    {
+        return _cart.Sum(c => c.LineTotal);
+    }
+
+    private void SearchProducts()
+    {
+        FilterProducts();
+    }
+
+    private void FilterByCategory()
+    {
+        FilterProducts();
+    }
+
+    private void FilterProducts()
+    {
+        _filteredProducts = _products;
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredProducts = _filteredProducts
+                .Where(p => p.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+                         || p.SKU.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+                         || p.Description.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        // Apply category filter
+        if (_selectedCategory?.Value is string category && category != "All")
+        {
+            _filteredProducts = _filteredProducts
+                .Where(p => p.Category == category)
+                .ToList();
+        }
+    }
+
+    private async Task CreateOrder()
+    {
+        if (!_cart.Any())
+        {
+            Snackbar.Add("Cart is empty", Severity.Warning);
+            return;
+        }
+
+        // Store cart in session and navigate to checkout
+        // For now, we'll just navigate to order form
+        Navigation.NavigateTo("/orders/new");
+        Snackbar.Add("Redirecting to checkout...", Severity.Info);
+    }
+
+    public class CartItem
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public string SKU { get; set; } = string.Empty;
+        public string UnitOfMeasure { get; set; } = string.Empty;
+        public decimal UnitPrice { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+}

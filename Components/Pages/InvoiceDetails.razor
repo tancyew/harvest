@@ -3,9 +3,11 @@
 @using Harvest.Services
 @inject InvoiceService InvoiceService
 @inject PaymentService PaymentService
+@inject GotenbergService GotenbergService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Invoice Details - Harvest</PageTitle>
 
@@ -217,8 +219,17 @@ else
                                   Color="Color.Primary"
                                   FullWidth="true"
                                   StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                                  Disabled="true">
-                            Download PDF
+                                  OnClick="DownloadPdf"
+                                  Disabled="@_generatingPdf">
+                            @if (_generatingPdf)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                <span class="ml-2">Generating...</span>
+                            }
+                            else
+                            {
+                                <span>Download PDF</span>
+                            }
                         </MudButton>
 
                         <MudButton Variant="Variant.Outlined"
@@ -233,7 +244,7 @@ else
                                   Color="Color.Info"
                                   FullWidth="true"
                                   StartIcon="@Icons.Material.Filled.Print"
-                                  Disabled="true">
+                                  OnClick="OpenPrintPage">
                             Print Invoice
                         </MudButton>
 
@@ -289,6 +300,7 @@ else
     private Invoice? _invoice;
     private List<Payment> _payments = new();
     private bool _loading = true;
+    private bool _generatingPdf = false;
     private List<BreadcrumbItem> _breadcrumbItems = new();
 
     protected override async Task OnInitializedAsync()
@@ -394,5 +406,46 @@ else
             Snackbar.Add("Invoice cancelled", Severity.Info);
             await LoadInvoice();
         }
+    }
+
+    private async Task DownloadPdf()
+    {
+        if (_invoice == null) return;
+
+        _generatingPdf = true;
+        StateHasChanged();
+
+        try
+        {
+            var baseUrl = Navigation.BaseUri.TrimEnd('/');
+            var pdfBytes = await GotenbergService.GenerateInvoicePdfAsync(_invoice.InvoiceId, baseUrl);
+
+            if (pdfBytes != null)
+            {
+                var fileName = $"Invoice-{_invoice.InvoiceNumber}.pdf";
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(pdfBytes));
+                Snackbar.Add("PDF generated successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to generate PDF. Make sure Gotenberg service is running.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _generatingPdf = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenPrintPage()
+    {
+        if (_invoice == null) return;
+        var printUrl = $"/print/invoice/{_invoice.InvoiceId}";
+        Navigation.NavigateTo(printUrl, true);
     }
 }

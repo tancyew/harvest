@@ -27,6 +27,12 @@ builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<CreditNoteService>();
 builder.Services.AddScoped<CustomerPricingService>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<SessionService>();
+builder.Services.AddScoped<GotenbergService>();
+
+// Add HttpClient for Gotenberg
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 

@@ -1,0 +1,160 @@
+@page "/register"
+@using Harvest.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Register - Harvest</PageTitle>
+
+<div class="register-container">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+        <MudPaper Elevation="3" Class="pa-6">
+            <!-- Logo/Header -->
+            <div class="text-center mb-6">
+                <MudIcon Icon="@Icons.Material.Filled.Agriculture" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h4" Class="mt-2">Join Harvest</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Create your account</MudText>
+            </div>
+
+            <MudForm @ref="_form" @bind-IsValid="@_isValid">
+                <MudText Typo="Typo.h6" Class="mb-4">Business Information</MudText>
+
+                <MudTextField @bind-Value="_businessName"
+                              Label="Business Name"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="Business name is required"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Business"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="_fullName"
+                              Label="Full Name"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="Full name is required"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Person"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="_email"
+                              Label="Email Address"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="Email is required"
+                              Validation="@(new System.ComponentModel.DataAnnotations.EmailAddressAttribute())"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Email"
+                              InputType="InputType.Email"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="_phone"
+                              Label="Phone Number"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="Phone number is required"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Phone"
+                              InputType="InputType.Telephone"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="_address"
+                              Label="Business Address"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.LocationOn"
+                              Class="mb-4" />
+
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          FullWidth="true"
+                          Size="Size.Large"
+                          OnClick="RegisterUser"
+                          Disabled="@_loading"
+                          Class="mb-3">
+                    @if (_loading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        <span class="ml-2">Registering...</span>
+                    }
+                    else
+                    {
+                        <span>Create Account</span>
+                    }
+                </MudButton>
+
+                <MudDivider Class="my-4" />
+
+                <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">
+                    Already have an account?
+                </MudText>
+                <MudButton Variant="Variant.Text"
+                          Color="Color.Primary"
+                          FullWidth="true"
+                          Href="/login"
+                          Class="mt-2">
+                    Sign In
+                </MudButton>
+            </MudForm>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+<style>
+    .register-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        padding: 20px 0;
+    }
+
+    @@media (max-width: 600px) {
+        .register-container {
+            padding: 10px;
+        }
+    }
+</style>
+
+@code {
+    private MudForm? _form;
+    private bool _isValid;
+    private bool _loading;
+
+    private string _businessName = string.Empty;
+    private string _fullName = string.Empty;
+    private string _email = string.Empty;
+    private string _phone = string.Empty;
+    private string _address = string.Empty;
+
+    private async Task RegisterUser()
+    {
+        if (_form != null)
+        {
+            await _form.Validate();
+            if (!_isValid) return;
+        }
+
+        _loading = true;
+        StateHasChanged();
+
+        var result = await AuthService.RegisterCustomerAsync(
+            _email, _phone, _fullName, _businessName, _address);
+
+        _loading = false;
+
+        if (result.Success)
+        {
+            Snackbar.Add(result.Message + " Please login to continue.", Severity.Success);
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/login");
+        }
+        else
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+        }
+
+        StateHasChanged();
+    }
+}

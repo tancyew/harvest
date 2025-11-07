@@ -241,6 +241,75 @@ public class ApplicationDbContext : DbContext
 
     private void SeedData(ModelBuilder modelBuilder)
     {
+        // Seed Users
+        modelBuilder.Entity<User>().HasData(
+            new User
+            {
+                UserId = 1,
+                Email = "admin@harvest.com",
+                Phone = "+60123456789",
+                FullName = "Admin User",
+                Role = "Admin",
+                UserType = "Admin",
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow
+            },
+            new User
+            {
+                UserId = 2,
+                Email = "john@customer.com",
+                Phone = "+60123456001",
+                FullName = "John Tan",
+                Role = "Customer",
+                UserType = "Customer",
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow
+            },
+            new User
+            {
+                UserId = 3,
+                Email = "mary@customer.com",
+                Phone = "+60123456002",
+                FullName = "Mary Wong",
+                Role = "Customer",
+                UserType = "Customer",
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow
+            }
+        );
+
+        // Seed Customers
+        modelBuilder.Entity<Customer>().HasData(
+            new Customer
+            {
+                CustomerId = 1,
+                UserId = 2,
+                BusinessName = "John's Fresh Market",
+                Address = "123 Market Street",
+                City = "Kuala Lumpur",
+                PostalCode = "50000",
+                Country = "Malaysia",
+                CreditLimit = 10000m,
+                OutstandingBalance = 0m,
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow
+            },
+            new Customer
+            {
+                CustomerId = 2,
+                UserId = 3,
+                BusinessName = "Mary's Grocery Store",
+                Address = "456 Main Road",
+                City = "Petaling Jaya",
+                PostalCode = "46000",
+                Country = "Malaysia",
+                CreditLimit = 15000m,
+                OutstandingBalance = 0m,
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow
+            }
+        );
+
         // Seed Products
         modelBuilder.Entity<Product>().HasData(
             new Product
