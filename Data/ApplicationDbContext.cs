@@ -14,6 +14,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductImage> ProductImages { get; set; }
     public DbSet<Inventory> Inventories { get; set; }
     public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
+    public DbSet<JournalEntry> JournalEntries { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +61,19 @@ public class ApplicationDbContext : DbContext
                   .WithMany(i => i.Transactions)
                   .HasForeignKey(e => e.InventoryId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // JournalEntry configuration
+        modelBuilder.Entity<JournalEntry>(entity =>
+        {
+            entity.HasKey(e => e.JournalEntryId);
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.HasOne(e => e.Product)
+                  .WithMany()
+                  .HasForeignKey(e => e.ProductId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => e.EntryType);
+            entity.HasIndex(e => e.EntryDate);
         });
 
         // Seed data

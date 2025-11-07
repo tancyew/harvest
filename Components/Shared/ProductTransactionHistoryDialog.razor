@@ -1,0 +1,116 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject InventoryService InventoryService
+
+<MudDialog>
+    <DialogContent>
+        <MudTable Items="@_transactions"
+                 Hover="true"
+                 Dense="true"
+                 Loading="@_loading"
+                 Height="400px"
+                 FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Quantity</MudTh>
+                <MudTh>Reference</MudTh>
+                <MudTh>Notes</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Date">
+                    @context.TransactionDate.ToString("MMM dd, yyyy HH:mm")
+                </MudTd>
+                <MudTd DataLabel="Type">
+                    <MudChip T="string" Size="Size.Small" Color="@GetTransactionColor(context.TransactionType)">
+                        @GetTransactionLabel(context.TransactionType)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Quantity">
+                    <MudText Typo="Typo.body2" Color="@GetQuantityColor(context.TransactionType)">
+                        @GetQuantityPrefix(context.TransactionType)@context.Quantity.ToString("N2")
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Reference">
+                    @(context.Reference ?? "-")
+                </MudTd>
+                <MudTd DataLabel="Notes">
+                    @(context.Notes ?? "-")
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public int ProductId { get; set; }
+
+    private List<InventoryTransaction> _transactions = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTransactions();
+    }
+
+    private async Task LoadTransactions()
+    {
+        _loading = true;
+        _transactions = await InventoryService.GetTransactionHistoryAsync(ProductId, 100);
+        _loading = false;
+    }
+
+    private Color GetTransactionColor(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => Color.Success,
+            "OUT" => Color.Error,
+            "ADJUSTMENT" => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private string GetTransactionLabel(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => "Stock In",
+            "OUT" => "Stock Out",
+            "ADJUSTMENT" => "Adjustment",
+            _ => transactionType
+        };
+    }
+
+    private Color GetQuantityColor(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => Color.Success,
+            "OUT" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetQuantityPrefix(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => "+",
+            "OUT" => "-",
+            _ => ""
+        };
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+}

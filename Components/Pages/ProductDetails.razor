@@ -1,0 +1,430 @@
+@page "/products/{ProductId:int}"
+@using Harvest.Models
+@using Harvest.Services
+@inject ProductService ProductService
+@inject InventoryService InventoryService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Product Details - Harvest</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_product == null)
+{
+    <MudAlert Severity="Severity.Error">Product not found</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/products" Class="mt-4">
+        Back to Products
+    </MudButton>
+}
+else
+{
+    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4"></MudBreadcrumbs>
+
+    <MudGrid>
+        <!-- Product Information Card -->
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h5">@_product.Name</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">SKU: @_product.SKU</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                      Color="Color.Primary"
+                                      OnClick="@OpenEditDialog"
+                                      Title="Edit Product" />
+                        <MudIconButton Icon="@(_product.IsActive ? Icons.Material.Filled.ToggleOff : Icons.Material.Filled.ToggleOn)"
+                                      Color="Color.Warning"
+                                      OnClick="@ToggleProductStatus"
+                                      Title="@(_product.IsActive ? "Deactivate" : "Activate")" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudChip T="string" Size="Size.Small" Color="@(_product.IsActive ? Color.Success : Color.Error)">
+                                @(_product.IsActive ? "Active" : "Inactive")
+                            </MudChip>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Category</MudText>
+                            <MudText Typo="Typo.body1">@_product.Category</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Unit of Measure</MudText>
+                            <MudText Typo="Typo.body1">@_product.UnitOfMeasure</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Base Price</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Primary">$@_product.BasePrice.ToString("N2")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Current Stock</MudText>
+                            @if (_product.Inventory != null)
+                            {
+                                var isLowStock = _product.Inventory.QuantityAvailable <= _product.Inventory.ReorderLevel;
+                                <MudText Typo="Typo.h6" Color="@(isLowStock ? Color.Warning : Color.Success)">
+                                    @_product.Inventory.QuantityAvailable.ToString("N2") @_product.UnitOfMeasure
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body1">N/A</MudText>
+                            }
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Description</MudText>
+                            <MudText Typo="Typo.body1">@(_product.Description ?? "No description available")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Created: @_product.CreatedDate.ToString("MMM dd, yyyy HH:mm")
+                            </MudText>
+                        </MudItem>
+                        @if (_product.ModifiedDate.HasValue)
+                        {
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Modified: @_product.ModifiedDate.Value.ToString("MMM dd, yyyy HH:mm")
+                                </MudText>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Inventory Details Card -->
+            @if (_product.Inventory != null)
+            {
+                <MudCard Elevation="2" Class="mt-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Inventory Details</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                          Color="Color.Primary"
+                                          OnClick="@OpenInventoryEditDialog"
+                                          Title="Edit Inventory" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" sm="4">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Available Stock</MudText>
+                                <MudText Typo="Typo.h6">@_product.Inventory.QuantityAvailable.ToString("N2") @_product.UnitOfMeasure</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Reorder Level</MudText>
+                                <MudText Typo="Typo.h6">@_product.Inventory.ReorderLevel.ToString("N2") @_product.UnitOfMeasure</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Status</MudText>
+                                @{
+                                    var isLowStock = _product.Inventory.QuantityAvailable <= _product.Inventory.ReorderLevel;
+                                    var isOutOfStock = _product.Inventory.QuantityAvailable == 0;
+                                }
+                                @if (isOutOfStock)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Error">Out of Stock</MudChip>
+                                }
+                                else if (isLowStock)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">Low Stock</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">In Stock</MudChip>
+                                }
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Last Updated: @_product.Inventory.LastUpdated.ToString("MMM dd, yyyy HH:mm")
+                                </MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Success"
+                                  StartIcon="@Icons.Material.Filled.AddCircle"
+                                  OnClick="@(() => OpenStockAdjustmentDialog(\"IN\"))">
+                            Receive Stock
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Error"
+                                  StartIcon="@Icons.Material.Filled.RemoveCircle"
+                                  OnClick="@(() => OpenStockAdjustmentDialog(\"OUT\"))">
+                            Issue Stock
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.Edit"
+                                  OnClick="@(() => OpenStockAdjustmentDialog(\"ADJUSTMENT\"))">
+                            Adjust Stock
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            }
+        </MudItem>
+
+        <!-- Images Card -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Product Images</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                      Color="Color.Primary"
+                                      Title="Add Image"
+                                      Disabled="true" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_product.Images.Any())
+                    {
+                        <MudStack>
+                            @foreach (var image in _product.Images.OrderBy(i => i.DisplayOrder))
+                            {
+                                <MudCard Outlined="true">
+                                    <MudCardMedia Image="@image.ImageUrl" Height="150" />
+                                    <MudCardActions>
+                                        @if (image.IsPrimary)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">Primary</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Size="Size.Small" Disabled="true">Set Primary</MudButton>
+                                        }
+                                        <MudSpacer />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                      Size="Size.Small"
+                                                      Color="Color.Error"
+                                                      Disabled="true" />
+                                    </MudCardActions>
+                                </MudCard>
+                            }
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">No images available. Image management coming soon.</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Quick Actions Card -->
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Quick Actions</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.History"
+                                  OnClick="@OpenTransactionHistory">
+                            View Transaction History
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Secondary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.ContentCopy"
+                                  Disabled="true">
+                            Duplicate Product
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Error"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Delete"
+                                  OnClick="@DeleteProduct">
+                            Delete Product
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public int ProductId { get; set; }
+
+    private Product? _product;
+    private bool _loading = true;
+    private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProduct();
+        SetupBreadcrumbs();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_product?.ProductId != ProductId)
+        {
+            await LoadProduct();
+            SetupBreadcrumbs();
+        }
+    }
+
+    private async Task LoadProduct()
+    {
+        _loading = true;
+        _product = await ProductService.GetProductByIdAsync(ProductId);
+        _loading = false;
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Home", href: "/"),
+            new BreadcrumbItem("Products", href: "/products"),
+            new BreadcrumbItem(_product?.Name ?? "Details", href: null, disabled: true)
+        };
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_product == null) return;
+
+        var parameters = new DialogParameters<ProductDialog>();
+        parameters.Add(x => x.Product, _product);
+        parameters.Add(x => x.IsNew, false);
+
+        var dialog = await DialogService.ShowAsync<ProductDialog>("Edit Product", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadProduct();
+            Snackbar.Add("Product updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenInventoryEditDialog()
+    {
+        if (_product?.Inventory == null) return;
+
+        var parameters = new DialogParameters<InventoryEditDialog>();
+        parameters.Add(x => x.Inventory, _product.Inventory);
+
+        var dialog = await DialogService.ShowAsync<InventoryEditDialog>("Edit Inventory Settings", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadProduct();
+            Snackbar.Add("Inventory settings updated!", Severity.Success);
+        }
+    }
+
+    private async Task OpenStockAdjustmentDialog(string transactionType)
+    {
+        if (_product?.Inventory == null) return;
+
+        var parameters = new DialogParameters<StockAdjustmentDialog>();
+        parameters.Add(x => x.Inventory, _product.Inventory);
+        parameters.Add(x => x.TransactionType, transactionType);
+
+        var title = transactionType switch
+        {
+            "IN" => "Receive Stock",
+            "OUT" => "Issue Stock",
+            "ADJUSTMENT" => "Adjust Stock Level",
+            _ => "Stock Adjustment"
+        };
+
+        var dialog = await DialogService.ShowAsync<StockAdjustmentDialog>(title, parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadProduct();
+            Snackbar.Add("Stock updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenTransactionHistory()
+    {
+        if (_product == null) return;
+
+        var parameters = new DialogParameters<ProductTransactionHistoryDialog>();
+        parameters.Add(x => x.ProductId, _product.ProductId);
+
+        await DialogService.ShowAsync<ProductTransactionHistoryDialog>("Transaction History", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        });
+    }
+
+    private async Task ToggleProductStatus()
+    {
+        if (_product == null) return;
+
+        if (_product.IsActive)
+        {
+            await ProductService.DeactivateProductAsync(_product.ProductId);
+            Snackbar.Add($"{_product.Name} deactivated", Severity.Info);
+        }
+        else
+        {
+            await ProductService.ActivateProductAsync(_product.ProductId);
+            Snackbar.Add($"{_product.Name} activated", Severity.Success);
+        }
+
+        await LoadProduct();
+    }
+
+    private async Task DeleteProduct()
+    {
+        if (_product == null) return;
+
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete '{_product.Name}'? This action cannot be undone and will also delete all inventory records.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var success = await ProductService.DeleteProductAsync(_product.ProductId);
+            if (success)
+            {
+                Snackbar.Add("Product deleted successfully!", Severity.Success);
+                Navigation.NavigateTo("/products");
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete product", Severity.Error);
+            }
+        }
+    }
+}

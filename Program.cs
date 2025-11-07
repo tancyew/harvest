@@ -20,6 +20,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Add application services
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<JournalService>();
 
 var app = builder.Build();
 

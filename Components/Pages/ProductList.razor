@@ -111,18 +111,26 @@
         </MudTd>
         <MudTd DataLabel="Actions">
             <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                              Color="Color.Info"
+                              Size="Size.Small"
+                              Href="@($"/products/{context.ProductId}")"
+                              Title="View Details" />
                 <MudIconButton Icon="@Icons.Material.Filled.Edit"
                               Color="Color.Primary"
                               Size="Size.Small"
-                              OnClick="@(() => OpenEditProductDialog(context))" />
+                              OnClick="@(() => OpenEditProductDialog(context))"
+                              Title="Edit" />
                 <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOff : Icons.Material.Filled.ToggleOn)"
                               Color="Color.Warning"
                               Size="Size.Small"
-                              OnClick="@(() => ToggleProductStatus(context))" />
+                              OnClick="@(() => ToggleProductStatus(context))"
+                              Title="@(context.IsActive ? "Deactivate" : "Activate")" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                               Color="Color.Error"
                               Size="Size.Small"
-                              OnClick="@(() => DeleteProduct(context))" />
+                              OnClick="@(() => DeleteProduct(context))"
+                              Title="Delete" />
             </MudButtonGroup>
         </MudTd>
     </RowTemplate>
