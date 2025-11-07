@@ -60,7 +60,7 @@
         </MudTd>
         <MudTd DataLabel="SKU">@context.Product.SKU</MudTd>
         <MudTd DataLabel="Category">
-            <MudChip Size="Size.Small" Color="Color.Info">@context.Product.Category</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Product.Category</MudChip>
         </MudTd>
         <MudTd DataLabel="Available Stock">
             <MudText Typo="Typo.body1">
@@ -77,19 +77,19 @@
             }
             @if (isOutOfStock)
             {
-                <MudChip Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">
+                <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">
                     Out of Stock
                 </MudChip>
             }
             else if (isLowStock)
             {
-                <MudChip Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
                     Low Stock
                 </MudChip>
             }
             else
             {
-                <MudChip Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
                     In Stock
                 </MudChip>
             }
