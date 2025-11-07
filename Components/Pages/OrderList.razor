@@ -1,0 +1,164 @@
+@page "/orders"
+@using Harvest.Models
+@using Harvest.Services
+@inject SalesOrderService OrderService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Sales Orders - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Sales Orders</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect @bind-Value="_selectedStatus"
+                          Label="Status Filter"
+                          Clearable="true"
+                          OnClearButtonClick="@(() => { _selectedStatus = null; LoadData(); })">
+                    <MudSelectItem Value="@("Pending")">Pending</MudSelectItem>
+                    <MudSelectItem Value="@("Confirmed")">Confirmed</MudSelectItem>
+                    <MudSelectItem Value="@("Packed")">Packed</MudSelectItem>
+                    <MudSelectItem Value="@("Shipped")">Shipped</MudSelectItem>
+                    <MudSelectItem Value="@("Delivered")">Delivered</MudSelectItem>
+                    <MudSelectItem Value="@("Completed")">Completed</MudSelectItem>
+                    <MudSelectItem Value="@("Cancelled")">Cancelled</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudDateRangePicker @bind-DateRange="_dateRange"
+                                   Label="Date Range"
+                                   Clearable="true"
+                                   @bind-DateRange:after="LoadData" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4" Class="d-flex align-end justify-end">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          Href="/orders/new">
+                    Create Order
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_orders"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading">
+    <HeaderContent>
+        <MudTh>Order #</MudTh>
+        <MudTh>Customer</MudTh>
+        <MudTh>Date</MudTh>
+        <MudTh>Items</MudTh>
+        <MudTh>Total</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Order #">
+            <MudLink Href="@($"/orders/{context.SalesOrderId}")">@context.OrderNumber</MudLink>
+        </MudTd>
+        <MudTd DataLabel="Customer">@context.Customer.BusinessName</MudTd>
+        <MudTd DataLabel="Date">@context.OrderDate.ToString("MMM dd, yyyy")</MudTd>
+        <MudTd DataLabel="Items">@context.LineItems.Count items</MudTd>
+        <MudTd DataLabel="Total">$@context.TotalAmount.ToString("N2")</MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                @context.Status
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                              Color="Color.Info"
+                              Size="Size.Small"
+                              Href="@($"/orders/{context.SalesOrderId}")"
+                              Title="View Details" />
+                @if (context.Status == "Pending" || context.Status == "Confirmed")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                  Color="Color.Primary"
+                                  Size="Size.Small"
+                                  Href="@($"/orders/{context.SalesOrderId}/edit")"
+                                  Title="Edit" />
+                }
+                @if (context.Invoice == null && context.Status != "Cancelled")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                  Color="Color.Error"
+                                  Size="Size.Small"
+                                  OnClick="@(() => CancelOrder(context))"
+                                  Title="Cancel" />
+                }
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<SalesOrder> _orders = new();
+    private string? _selectedStatus;
+    private DateRange? _dateRange;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        if (!string.IsNullOrEmpty(_selectedStatus))
+        {
+            _orders = await OrderService.GetOrdersByStatusAsync(_selectedStatus);
+        }
+        else if (_dateRange != null && _dateRange.Start.HasValue && _dateRange.End.HasValue)
+        {
+            _orders = await OrderService.GetOrdersByDateRangeAsync(_dateRange.Start, _dateRange.End);
+        }
+        else
+        {
+            _orders = await OrderService.GetAllOrdersAsync();
+        }
+
+        _loading = false;
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Pending" => Color.Default,
+            "Confirmed" => Color.Info,
+            "Packed" => Color.Primary,
+            "Shipped" => Color.Secondary,
+            "Delivered" => Color.Success,
+            "Completed" => Color.Success,
+            "Cancelled" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private async Task CancelOrder(SalesOrder order)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Cancellation",
+            $"Are you sure you want to cancel order {order.OrderNumber}?",
+            yesText: "Cancel Order",
+            cancelText: "Keep Order");
+
+        if (result == true)
+        {
+            await OrderService.UpdateOrderStatusAsync(order.SalesOrderId, "Cancelled");
+            Snackbar.Add("Order cancelled", Severity.Info);
+            await LoadData();
+        }
+    }
+}

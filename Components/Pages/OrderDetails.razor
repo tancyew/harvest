@@ -1,0 +1,313 @@
+@page "/orders/{OrderId:int}"
+@using Harvest.Models
+@using Harvest.Services
+@inject SalesOrderService OrderService
+@inject InvoiceService InvoiceService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Order Details - Harvest</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_order == null)
+{
+    <MudAlert Severity="Severity.Error">Order not found</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/orders" Class="mt-4">
+        Back to Orders
+    </MudButton>
+}
+else
+{
+    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4"></MudBreadcrumbs>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h5">Order @_order.OrderNumber</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@_order.OrderDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudChip T="string" Color="@GetStatusColor(_order.Status)">@_order.Status</MudChip>
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Customer</MudText>
+                            <MudLink Href="@($"/customers/{_order.Customer.CustomerId}")">
+                                <MudText Typo="Typo.body1">@_order.Customer.BusinessName</MudText>
+                            </MudLink>
+                            <MudText Typo="Typo.body2">@_order.Customer.User.FullName</MudText>
+                            <MudText Typo="Typo.body2">@_order.Customer.User.Email</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Delivery Details</MudText>
+                            <MudText Typo="Typo.body1">
+                                @if (_order.DeliveryDate.HasValue)
+                                {
+                                    @_order.DeliveryDate.Value.ToString("MMM dd, yyyy")
+                                }
+                                else
+                                {
+                                    <span>Not scheduled</span>
+                                }
+                            </MudText>
+                        </MudItem>
+                        @if (!string.IsNullOrEmpty(_order.Notes))
+                        {
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Notes</MudText>
+                                <MudText Typo="Typo.body2">@_order.Notes</MudText>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Order Items</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="@_order.LineItems" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Product</MudTh>
+                            <MudTh>Unit Price</MudTh>
+                            <MudTh>Quantity</MudTh>
+                            <MudTh>Discount</MudTh>
+                            <MudTh>Total</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudText Typo="Typo.body2">@context.Product.Name</MudText>
+                                <MudText Typo="Typo.caption">@context.Product.SKU</MudText>
+                            </MudTd>
+                            <MudTd>$@context.UnitPrice.ToString("N2")</MudTd>
+                            <MudTd>@context.Quantity @context.Product.UnitOfMeasure</MudTd>
+                            <MudTd>$@context.DiscountAmount.ToString("N2")</MudTd>
+                            <MudTd><strong>$@context.LineTotal.ToString("N2")</strong></MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudGrid Justify="Justify.FlexEnd">
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudStack Spacing="2">
+                                <div Class="d-flex justify-space-between">
+                                    <MudText>Subtotal:</MudText>
+                                    <MudText><strong>$@_order.SubTotal.ToString("N2")</strong></MudText>
+                                </div>
+                                @if (_order.DiscountAmount > 0)
+                                {
+                                    <div Class="d-flex justify-space-between">
+                                        <MudText>Discount:</MudText>
+                                        <MudText Color="Color.Success">-$@_order.DiscountAmount.ToString("N2")</MudText>
+                                    </div>
+                                }
+                                @if (_order.TaxAmount > 0)
+                                {
+                                    <div Class="d-flex justify-space-between">
+                                        <MudText>Tax:</MudText>
+                                        <MudText>$@_order.TaxAmount.ToString("N2")</MudText>
+                                    </div>
+                                }
+                                <MudDivider />
+                                <div Class="d-flex justify-space-between">
+                                    <MudText Typo="Typo.h6">Total:</MudText>
+                                    <MudText Typo="Typo.h6" Color="Color.Primary">$@_order.TotalAmount.ToString("N2")</MudText>
+                                </div>
+                            </MudStack>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Order Actions</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        @if (_order.Status == "Pending")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      FullWidth="true"
+                                      OnClick="@(() => UpdateStatus("Confirmed"))">
+                                Confirm Order
+                            </MudButton>
+                        }
+                        @if (_order.Status == "Confirmed")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      FullWidth="true"
+                                      OnClick="@(() => UpdateStatus("Packed"))">
+                                Mark as Packed
+                            </MudButton>
+                        }
+                        @if (_order.Status == "Packed")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      FullWidth="true"
+                                      OnClick="@(() => UpdateStatus("Shipped"))">
+                                Mark as Shipped
+                            </MudButton>
+                        }
+                        @if (_order.Status == "Shipped")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      FullWidth="true"
+                                      OnClick="@(() => UpdateStatus("Delivered"))">
+                                Mark as Delivered
+                            </MudButton>
+                        }
+                        @if (_order.Status == "Delivered")
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Success"
+                                      FullWidth="true"
+                                      OnClick="@(() => UpdateStatus("Completed"))">
+                                Complete Order
+                            </MudButton>
+                        }
+
+                        @if (_order.Invoice == null && _order.Status != "Cancelled")
+                        {
+                            <MudDivider Class="my-2" />
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Secondary"
+                                      FullWidth="true"
+                                      StartIcon="@Icons.Material.Filled.Receipt"
+                                      OnClick="@GenerateInvoice">
+                                Generate Invoice
+                            </MudButton>
+                        }
+                        else if (_order.Invoice != null)
+                        {
+                            <MudDivider Class="my-2" />
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Info"
+                                      FullWidth="true"
+                                      StartIcon="@Icons.Material.Filled.Receipt"
+                                      Href="@($"/invoices/{_order.Invoice.InvoiceId}")">
+                                View Invoice
+                            </MudButton>
+                        }
+
+                        @if (_order.Status != "Completed" && _order.Status != "Cancelled")
+                        {
+                            <MudDivider Class="my-2" />
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Error"
+                                      FullWidth="true"
+                                      OnClick="@CancelOrder">
+                                Cancel Order
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public int OrderId { get; set; }
+
+    private SalesOrder? _order;
+    private bool _loading = true;
+    private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrder();
+        SetupBreadcrumbs();
+    }
+
+    private async Task LoadOrder()
+    {
+        _loading = true;
+        _order = await OrderService.GetOrderByIdAsync(OrderId);
+        _loading = false;
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Home", href: "/"),
+            new BreadcrumbItem("Orders", href: "/orders"),
+            new BreadcrumbItem(_order?.OrderNumber ?? "Details", href: null, disabled: true)
+        };
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Pending" => Color.Default,
+            "Confirmed" => Color.Info,
+            "Packed" => Color.Primary,
+            "Shipped" => Color.Secondary,
+            "Delivered" => Color.Success,
+            "Completed" => Color.Success,
+            "Cancelled" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private async Task UpdateStatus(string newStatus)
+    {
+        await OrderService.UpdateOrderStatusAsync(OrderId, newStatus);
+        Snackbar.Add($"Order status updated to {newStatus}", Severity.Success);
+        await LoadOrder();
+        SetupBreadcrumbs();
+    }
+
+    private async Task GenerateInvoice()
+    {
+        try
+        {
+            var invoice = await InvoiceService.CreateInvoiceFromOrderAsync(OrderId);
+            Snackbar.Add("Invoice generated successfully!", Severity.Success);
+            Navigation.NavigateTo($"/invoices/{invoice.InvoiceId}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating invoice: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CancelOrder()
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Cancellation",
+            "Are you sure you want to cancel this order?",
+            yesText: "Cancel Order",
+            cancelText: "Keep Order");
+
+        if (result == true)
+        {
+            await OrderService.UpdateOrderStatusAsync(OrderId, "Cancelled");
+            Snackbar.Add("Order cancelled", Severity.Info);
+            await LoadOrder();
+        }
+    }
+}
