@@ -42,7 +42,7 @@
                     <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Inventory.Product.SKU</MudText>
                 </MudTd>
                 <MudTd DataLabel="Type">
-                    <MudChip Size="Size.Small" Color="@GetTransactionColor(context.TransactionType)">
+                    <MudChip T="string" Size="Size.Small" Color="@GetTransactionColor(context.TransactionType)">
                         @GetTransactionLabel(context.TransactionType)
                     </MudChip>
                 </MudTd>

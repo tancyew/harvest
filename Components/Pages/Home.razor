@@ -78,11 +78,11 @@
             </MudCardHeader>
             <MudCardContent>
                 <MudStack>
-                    <MudChip Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success">Database Connected</MudChip>
-                    <MudChip Icon="@Icons.Material.Filled.Inventory" Color="Color.Info">@_totalProducts Products Loaded</MudChip>
+                    <MudChip T="string" Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success">Database Connected</MudChip>
+                    <MudChip T="string" Icon="@Icons.Material.Filled.Inventory" Color="Color.Info">@_totalProducts Products Loaded</MudChip>
                     @if (_lowStockCount > 0)
                     {
-                        <MudChip Icon="@Icons.Material.Filled.Warning" Color="Color.Warning">@_lowStockCount Items Low Stock</MudChip>
+                        <MudChip T="string" Icon="@Icons.Material.Filled.Warning" Color="Color.Warning">@_lowStockCount Items Low Stock</MudChip>
                     }
                 </MudStack>
             </MudCardContent>

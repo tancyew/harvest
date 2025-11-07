@@ -87,7 +87,7 @@
             }
         </MudTd>
         <MudTd DataLabel="Category">
-            <MudChip Size="Size.Small" Color="Color.Info">@context.Category</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Category</MudChip>
         </MudTd>
         <MudTd DataLabel="Unit">@context.UnitOfMeasure</MudTd>
         <MudTd DataLabel="Base Price">$@context.BasePrice.ToString("N2")</MudTd>
@@ -95,17 +95,17 @@
             @if (context.Inventory != null)
             {
                 var isLowStock = context.Inventory.QuantityAvailable <= context.Inventory.ReorderLevel;
-                <MudChip Size="Size.Small" Color="@(isLowStock ? Color.Warning : Color.Success)">
+                <MudChip T="string" Size="Size.Small" Color="@(isLowStock ? Color.Warning : Color.Success)">
                     @context.Inventory.QuantityAvailable @context.UnitOfMeasure
                 </MudChip>
             }
             else
             {
-                <MudChip Size="Size.Small" Color="Color.Default">N/A</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Default">N/A</MudChip>
             }
         </MudTd>
         <MudTd DataLabel="Status">
-            <MudChip Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
+            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
                 @(context.IsActive ? "Active" : "Inactive")
             </MudChip>
         </MudTd>
