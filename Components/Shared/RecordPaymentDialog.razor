@@ -1,0 +1,121 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject PaymentService PaymentService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6">Record Payment for @InvoiceNumber</MudText>
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                        Balance Due: $@BalanceAmount.ToString("N2")
+                    </MudAlert>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudNumericField @bind-Value="_payment.Amount"
+                                    Label="Payment Amount"
+                                    Required="true"
+                                    Min="0.01M"
+                                    Max="@BalanceAmount"
+                                    Step="0.01M"
+                                    Format="N2"
+                                    Adornment="Adornment.Start"
+                                    AdornmentText="$" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudDatePicker @bind-Date="_paymentDate"
+                                  Label="Payment Date"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="_payment.PaymentMethod"
+                              Label="Payment Method"
+                              Required="true">
+                        <MudSelectItem Value="@("Cash")">Cash</MudSelectItem>
+                        <MudSelectItem Value="@("Bank Transfer")">Bank Transfer</MudSelectItem>
+                        <MudSelectItem Value="@("Card")">Card</MudSelectItem>
+                        <MudSelectItem Value="@("Cheque")">Cheque</MudSelectItem>
+                        <MudSelectItem Value="@("Digital Wallet")">Digital Wallet</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_payment.Reference"
+                                 Label="Reference (Optional)"
+                                 Placeholder="e.g., Transaction ID, Cheque #" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_payment.Notes"
+                                 Label="Notes (Optional)"
+                                 Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Success"
+                  Variant="Variant.Filled"
+                  OnClick="Save"
+                  Disabled="@(!_isValid)">
+            Record Payment
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public int InvoiceId { get; set; }
+
+    [Parameter]
+    public string InvoiceNumber { get; set; } = string.Empty;
+
+    [Parameter]
+    public decimal BalanceAmount { get; set; }
+
+    private Payment _payment = new();
+    private DateTime? _paymentDate = DateTime.Now;
+    private MudForm? _form;
+    private bool _isValid;
+
+    protected override void OnInitialized()
+    {
+        _payment.InvoiceId = InvoiceId;
+        _payment.Amount = BalanceAmount;
+        _payment.PaymentMethod = "Cash";
+        _payment.Status = "Completed";
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await _form!.Validate();
+
+        if (!_isValid)
+        {
+            Snackbar.Add("Please fix validation errors", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            if (_paymentDate.HasValue)
+                _payment.PaymentDate = _paymentDate.Value;
+
+            await PaymentService.RecordPaymentAsync(_payment);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

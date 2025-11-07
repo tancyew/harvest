@@ -2,7 +2,17 @@
     <MudText Typo="Typo.h6" Class="px-4 py-2">Menu</MudText>
     <MudDivider Class="mb-2" />
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
-    <MudNavLink Href="/products" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inventory">Products</MudNavLink>
-    <MudNavLink Href="/inventory" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Warehouse">Inventory</MudNavLink>
+
+    <MudNavGroup Title="Catalog" Icon="@Icons.Material.Filled.Inventory" Expanded="false">
+        <MudNavLink Href="/products" Icon="@Icons.Material.Filled.Category">Products</MudNavLink>
+        <MudNavLink Href="/inventory" Icon="@Icons.Material.Filled.Warehouse">Inventory</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Sales" Icon="@Icons.Material.Filled.ShoppingCart" Expanded="false">
+        <MudNavLink Href="/customers" Icon="@Icons.Material.Filled.People">Customers</MudNavLink>
+        <MudNavLink Href="/orders" Icon="@Icons.Material.Filled.ShoppingBag">Orders</MudNavLink>
+        <MudNavLink Href="/invoices" Icon="@Icons.Material.Filled.Receipt">Invoices</MudNavLink>
+    </MudNavGroup>
+
     <MudNavLink Href="/journal" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Book">Journal</MudNavLink>
 </MudNavMenu>

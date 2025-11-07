@@ -1,0 +1,173 @@
+@page "/invoices"
+@using Harvest.Models
+@using Harvest.Services
+@inject InvoiceService InvoiceService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Invoices - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Invoices</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect @bind-Value="_selectedStatus"
+                          Label="Status Filter"
+                          Clearable="true"
+                          OnClearButtonClick="@(() => { _selectedStatus = null; LoadData(); })">
+                    <MudSelectItem Value="@("Draft")">Draft</MudSelectItem>
+                    <MudSelectItem Value="@("Sent")">Sent</MudSelectItem>
+                    <MudSelectItem Value="@("Paid")">Paid</MudSelectItem>
+                    <MudSelectItem Value="@("Overdue")">Overdue</MudSelectItem>
+                    <MudSelectItem Value="@("Cancelled")">Cancelled</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudButton Variant="Variant.Outlined"
+                          Color="Color.Warning"
+                          StartIcon="@Icons.Material.Filled.Warning"
+                          OnClick="@LoadOverdueInvoices">
+                    View Overdue (@_overdueCount)
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_invoices"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading">
+    <HeaderContent>
+        <MudTh>Invoice #</MudTh>
+        <MudTh>Customer</MudTh>
+        <MudTh>Invoice Date</MudTh>
+        <MudTh>Due Date</MudTh>
+        <MudTh>Total</MudTh>
+        <MudTh>Paid</MudTh>
+        <MudTh>Balance</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Invoice #">
+            <MudLink Href="@($"/invoices/{context.InvoiceId}")">@context.InvoiceNumber</MudLink>
+        </MudTd>
+        <MudTd DataLabel="Customer">@context.SalesOrder.Customer.BusinessName</MudTd>
+        <MudTd DataLabel="Invoice Date">@context.InvoiceDate.ToString("MMM dd, yyyy")</MudTd>
+        <MudTd DataLabel="Due Date">
+            <MudText Color="@(context.DueDate < DateTime.UtcNow && context.Status != "Paid" ? Color.Error : Color.Default)">
+                @context.DueDate.ToString("MMM dd, yyyy")
+            </MudText>
+        </MudTd>
+        <MudTd DataLabel="Total">$@context.TotalAmount.ToString("N2")</MudTd>
+        <MudTd DataLabel="Paid">$@context.PaidAmount.ToString("N2")</MudTd>
+        <MudTd DataLabel="Balance">
+            <MudText Color="@(context.BalanceAmount > 0 ? Color.Warning : Color.Success)">
+                $@context.BalanceAmount.ToString("N2")
+            </MudText>
+        </MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                @context.Status
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                              Color="Color.Info"
+                              Size="Size.Small"
+                              Href="@($"/invoices/{context.InvoiceId}")"
+                              Title="View Details" />
+                @if (context.Status != "Paid" && context.Status != "Cancelled")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Payment"
+                                  Color="Color.Success"
+                                  Size="Size.Small"
+                                  OnClick="@(() => RecordPayment(context))"
+                                  Title="Record Payment" />
+                }
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Invoice> _invoices = new();
+    private string? _selectedStatus;
+    private int _overdueCount;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        await LoadOverdueCount();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        if (!string.IsNullOrEmpty(_selectedStatus))
+        {
+            _invoices = await InvoiceService.GetInvoicesByStatusAsync(_selectedStatus);
+        }
+        else
+        {
+            _invoices = await InvoiceService.GetAllInvoicesAsync();
+        }
+
+        _loading = false;
+    }
+
+    private async Task LoadOverdueCount()
+    {
+        var overdueInvoices = await InvoiceService.GetOverdueInvoicesAsync();
+        _overdueCount = overdueInvoices.Count;
+    }
+
+    private async Task LoadOverdueInvoices()
+    {
+        _loading = true;
+        _invoices = await InvoiceService.GetOverdueInvoicesAsync();
+        _loading = false;
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Draft" => Color.Default,
+            "Sent" => Color.Info,
+            "Paid" => Color.Success,
+            "Overdue" => Color.Error,
+            "Cancelled" => Color.Dark,
+            _ => Color.Default
+        };
+    }
+
+    private async Task RecordPayment(Invoice invoice)
+    {
+        var parameters = new DialogParameters<RecordPaymentDialog>();
+        parameters.Add(x => x.InvoiceId, invoice.InvoiceId);
+        parameters.Add(x => x.InvoiceNumber, invoice.InvoiceNumber);
+        parameters.Add(x => x.BalanceAmount, invoice.BalanceAmount);
+
+        var dialog = await DialogService.ShowAsync<RecordPaymentDialog>("Record Payment", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadData();
+            await LoadOverdueCount();
+            Snackbar.Add("Payment recorded successfully!", Severity.Success);
+        }
+    }
+}
