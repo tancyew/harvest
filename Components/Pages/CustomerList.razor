@@ -1,0 +1,185 @@
+@page "/customers"
+@using Harvest.Models
+@using Harvest.Services
+@inject CustomerService CustomerService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Customers - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Customers</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="8">
+                <MudTextField @bind-Value="_searchString"
+                             Placeholder="Search customers..."
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             Immediate="true"
+                             OnKeyUp="@OnSearch" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4" Class="d-flex align-end justify-end">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="@OpenAddDialog">
+                    Add Customer
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_filteredCustomers"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading">
+    <HeaderContent>
+        <MudTh>Business Name</MudTh>
+        <MudTh>Contact Person</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Phone</MudTh>
+        <MudTh>Outstanding</MudTh>
+        <MudTh>Credit Limit</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Business Name">@context.BusinessName</MudTd>
+        <MudTd DataLabel="Contact Person">@context.User.FullName</MudTd>
+        <MudTd DataLabel="Email">@context.User.Email</MudTd>
+        <MudTd DataLabel="Phone">@context.User.Phone</MudTd>
+        <MudTd DataLabel="Outstanding">
+            <MudText Typo="Typo.body2" Color="@(context.OutstandingBalance > 0 ? Color.Warning : Color.Default)">
+                $@context.OutstandingBalance.ToString("N2")
+            </MudText>
+        </MudTd>
+        <MudTd DataLabel="Credit Limit">$@context.CreditLimit.ToString("N2")</MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
+                @(context.IsActive ? "Active" : "Inactive")
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                              Color="Color.Info"
+                              Size="Size.Small"
+                              Href="@($"/customers/{context.CustomerId}")"
+                              Title="View Details" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                              Color="Color.Primary"
+                              Size="Size.Small"
+                              OnClick="@(() => OpenEditDialog(context))"
+                              Title="Edit" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                              Color="Color.Error"
+                              Size="Size.Small"
+                              OnClick="@(() => DeleteCustomer(context))"
+                              Title="Delete" />
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Customer> _customers = new();
+    private List<Customer> _filteredCustomers = new();
+    private string? _searchString;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _customers = await CustomerService.GetAllCustomersAsync();
+        _filteredCustomers = _customers;
+        _loading = false;
+    }
+
+    private void OnSearch()
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+        {
+            _filteredCustomers = _customers;
+        }
+        else
+        {
+            _filteredCustomers = _customers
+                .Where(c => c.BusinessName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                           c.User.Email.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                           c.User.Phone.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters<CustomerDialog>();
+        parameters.Add(x => x.Customer, new Customer { User = new User() });
+        parameters.Add(x => x.IsNew, true);
+
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Add New Customer", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Customer added successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(Customer customer)
+    {
+        var parameters = new DialogParameters<CustomerDialog>();
+        parameters.Add(x => x.Customer, customer);
+        parameters.Add(x => x.IsNew, false);
+
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Edit Customer", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Customer updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task DeleteCustomer(Customer customer)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete '{customer.BusinessName}'? This action cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var success = await CustomerService.DeleteCustomerAsync(customer.CustomerId);
+            if (success)
+            {
+                Snackbar.Add("Customer deleted successfully!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete customer", Severity.Error);
+            }
+        }
+    }
+}

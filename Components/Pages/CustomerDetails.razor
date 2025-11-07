@@ -1,0 +1,264 @@
+@page "/customers/{CustomerId:int}"
+@using Harvest.Models
+@using Harvest.Services
+@inject CustomerService CustomerService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Customer Details - Harvest</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_customer == null)
+{
+    <MudAlert Severity="Severity.Error">Customer not found</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/customers" Class="mt-4">
+        Back to Customers
+    </MudButton>
+}
+else
+{
+    <MudBreadcrumbs Items="_breadcrumbItems" Class="mb-4"></MudBreadcrumbs>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h5">@_customer.BusinessName</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Customer ID: @_customer.CustomerId</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                      Color="Color.Primary"
+                                      OnClick="@OpenEditDialog"
+                                      Title="Edit Customer" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudChip T="string" Size="Size.Small" Color="@(_customer.IsActive ? Color.Success : Color.Error)">
+                                @(_customer.IsActive ? "Active" : "Inactive")
+                            </MudChip>
+                        </MudItem>
+
+                        <MudItem xs="12" Class="mt-2">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Address</MudText>
+                            <MudText Typo="Typo.body1">@(_customer.Address ?? "N/A")</MudText>
+                            @if (!string.IsNullOrEmpty(_customer.City))
+                            {
+                                <MudText Typo="Typo.body2">@_customer.City, @_customer.PostalCode</MudText>
+                            }
+                            @if (!string.IsNullOrEmpty(_customer.Country))
+                            {
+                                <MudText Typo="Typo.body2">@_customer.Country</MudText>
+                            }
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Contact Person</MudText>
+                            <MudText Typo="Typo.body1">@_customer.User.FullName</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Tax ID</MudText>
+                            <MudText Typo="Typo.body1">@(_customer.TaxId ?? "N/A")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Email</MudText>
+                            <MudText Typo="Typo.body1">@_customer.User.Email</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Phone</MudText>
+                            <MudText Typo="Typo.body1">@_customer.User.Phone</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Recent Orders</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_customer.SalesOrders.Any())
+                    {
+                        <MudTable Items="@_customer.SalesOrders.Take(5)" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Order #</MudTh>
+                                <MudTh>Date</MudTh>
+                                <MudTh>Amount</MudTh>
+                                <MudTh>Status</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudLink Href="@($"/orders/{context.SalesOrderId}")">@context.OrderNumber</MudLink>
+                                </MudTd>
+                                <MudTd>@context.OrderDate.ToString("MMM dd, yyyy")</MudTd>
+                                <MudTd>$@context.TotalAmount.ToString("N2")</MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Size="Size.Small">@context.Status</MudChip>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                        <MudButton Href="/orders" StartIcon="@Icons.Material.Filled.List" Class="mt-2">View All Orders</MudButton>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">No orders yet</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Financial Summary</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="3">
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Outstanding Balance</MudText>
+                            <MudText Typo="Typo.h6" Color="@(_customer.OutstandingBalance > 0 ? Color.Warning : Color.Success)">
+                                $@_customer.OutstandingBalance.ToString("N2")
+                            </MudText>
+                        </div>
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Credit Limit</MudText>
+                            <MudText Typo="Typo.h6">$@_customer.CreditLimit.ToString("N2")</MudText>
+                        </div>
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Available Credit</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Info">
+                                $@((_customer.CreditLimit - _customer.OutstandingBalance).ToString("N2"))
+                            </MudText>
+                        </div>
+                        @if (_customer.OutstandingBalance > _customer.CreditLimit)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">Over credit limit!</MudAlert>
+                        }
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Quick Actions</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.ShoppingCart"
+                                  Href="@($"/orders/new?customerId={_customer.CustomerId}")">
+                            Create Order
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Secondary"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.PriceCheck"
+                                  Href="@($"/pricing?customerId={_customer.CustomerId}")">
+                            Manage Pricing
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Info"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Receipt"
+                                  Href="@($"/invoices?customerId={_customer.CustomerId}")">
+                            View Invoices
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Customer Info</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Created</MudText>
+                            <MudText Typo="Typo.body2">@_customer.CreatedDate.ToString("MMM dd, yyyy")</MudText>
+                        </div>
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Total Orders</MudText>
+                            <MudText Typo="Typo.body2">@_customer.SalesOrders.Count</MudText>
+                        </div>
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Custom Pricing Rules</MudText>
+                            <MudText Typo="Typo.body2">@_customer.CustomerPricings.Count</MudText>
+                        </div>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public int CustomerId { get; set; }
+
+    private Customer? _customer;
+    private bool _loading = true;
+    private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomer();
+        SetupBreadcrumbs();
+    }
+
+    private async Task LoadCustomer()
+    {
+        _loading = true;
+        _customer = await CustomerService.GetCustomerByIdAsync(CustomerId);
+        _loading = false;
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Home", href: "/"),
+            new BreadcrumbItem("Customers", href: "/customers"),
+            new BreadcrumbItem(_customer?.BusinessName ?? "Details", href: null, disabled: true)
+        };
+    }
+
+    private async Task OpenEditDialog()
+    {
+        if (_customer == null) return;
+
+        var parameters = new DialogParameters<CustomerDialog>();
+        parameters.Add(x => x.Customer, _customer);
+        parameters.Add(x => x.IsNew, false);
+
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Edit Customer", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await LoadCustomer();
+            Snackbar.Add("Customer updated successfully!", Severity.Success);
+        }
+    }
+}
