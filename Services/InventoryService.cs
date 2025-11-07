@@ -31,11 +31,13 @@ public class InventoryService
 
     public async Task<List<Inventory>> GetLowStockItemsAsync()
     {
-        return await _context.Inventories
+        var items = await _context.Inventories
             .Include(i => i.Product)
             .Where(i => i.QuantityAvailable <= i.ReorderLevel)
-            .OrderBy(i => i.QuantityAvailable)
             .ToListAsync();
+
+        // Order by decimal on client side (SQLite doesn't support ordering by decimal in SQL)
+        return items.OrderBy(i => i.QuantityAvailable).ToList();
     }
 
     public async Task<bool> CheckStockAvailability(int productId, decimal quantity)
