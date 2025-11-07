@@ -1,0 +1,88 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject InventoryService InventoryService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6">@Inventory.Product.Name</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">SKU: @Inventory.Product.SKU</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Current Stock: @Inventory.QuantityAvailable.ToString("N2") @Inventory.Product.UnitOfMeasure
+                </MudAlert>
+            </MudItem>
+            <MudItem xs="12">
+                <MudNumericField @bind-Value="_reorderLevel"
+                                Label="Reorder Level"
+                                Required="true"
+                                Min="0"
+                                Step="1M"
+                                Format="N2"
+                                Adornment="Adornment.End"
+                                AdornmentText="@Inventory.Product.UnitOfMeasure"
+                                HelperText="Alert when stock falls to or below this level" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.caption">
+                    Current reorder level: @Inventory.ReorderLevel.ToString("N2") @Inventory.Product.UnitOfMeasure
+                </MudText>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  OnClick="Save">
+            Update
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Harvest.Models.Inventory Inventory { get; set; } = null!;
+
+    private decimal _reorderLevel;
+
+    protected override void OnInitialized()
+    {
+        _reorderLevel = Inventory.ReorderLevel;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            var success = await InventoryService.UpdateReorderLevelAsync(
+                Inventory.ProductId,
+                _reorderLevel
+            );
+
+            if (success)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to update reorder level", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

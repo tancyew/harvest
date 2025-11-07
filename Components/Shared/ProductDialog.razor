@@ -1,0 +1,171 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject ProductService ProductService
+@inject InventoryService InventoryService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="Product.Name"
+                                 Label="Product Name"
+                                 Required="true"
+                                 RequiredError="Product name is required" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="Product.SKU"
+                                 Label="SKU"
+                                 Required="true"
+                                 RequiredError="SKU is required" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Product.Description"
+                                 Label="Description"
+                                 Lines="3" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="Product.Category"
+                                 Label="Category"
+                                 Required="true"
+                                 RequiredError="Category is required" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="Product.UnitOfMeasure"
+                              Label="Unit of Measure"
+                              Required="true">
+                        <MudSelectItem Value="@("kg")">Kilogram (kg)</MudSelectItem>
+                        <MudSelectItem Value="@("g")">Gram (g)</MudSelectItem>
+                        <MudSelectItem Value="@("pcs")">Pieces (pcs)</MudSelectItem>
+                        <MudSelectItem Value="@("box")">Box</MudSelectItem>
+                        <MudSelectItem Value="@("crate")">Crate</MudSelectItem>
+                        <MudSelectItem Value="@("dozen")">Dozen</MudSelectItem>
+                        <MudSelectItem Value="@("lb")">Pound (lb)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="Product.BasePrice"
+                                    Label="Base Price"
+                                    Required="true"
+                                    Min="0"
+                                    Step="0.01M"
+                                    Format="N2"
+                                    Adornment="Adornment.Start"
+                                    AdornmentText="$" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSwitch @bind-Value="Product.IsActive"
+                              Label="Active"
+                              Color="Color.Success" />
+                </MudItem>
+
+                @if (IsNew)
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.h6" Class="mb-2">Initial Inventory (Optional)</MudText>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudNumericField @bind-Value="_initialStock"
+                                        Label="Initial Stock Quantity"
+                                        Min="0"
+                                        Step="1M"
+                                        Format="N2" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudNumericField @bind-Value="_reorderLevel"
+                                        Label="Reorder Level"
+                                        Min="0"
+                                        Step="1M"
+                                        Format="N2" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  OnClick="Save"
+                  Disabled="@(!_isValid)">
+            @(IsNew ? "Create" : "Update")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Product Product { get; set; } = new();
+
+    [Parameter]
+    public bool IsNew { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+    private decimal _initialStock = 0;
+    private decimal _reorderLevel = 0;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        await _form!.Validate();
+
+        if (!_isValid)
+        {
+            Snackbar.Add("Please fix validation errors", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            if (IsNew)
+            {
+                // Create product
+                var createdProduct = await ProductService.CreateProductAsync(Product);
+
+                // Create initial inventory if stock quantity is provided
+                if (_initialStock > 0)
+                {
+                    var inventory = new Inventory
+                    {
+                        ProductId = createdProduct.ProductId,
+                        QuantityAvailable = _initialStock,
+                        ReorderLevel = _reorderLevel
+                    };
+                    await InventoryService.CreateInventoryAsync(inventory);
+                }
+                else
+                {
+                    // Create empty inventory record
+                    var inventory = new Inventory
+                    {
+                        ProductId = createdProduct.ProductId,
+                        QuantityAvailable = 0,
+                        ReorderLevel = _reorderLevel
+                    };
+                    await InventoryService.CreateInventoryAsync(inventory);
+                }
+            }
+            else
+            {
+                // Update product
+                await ProductService.UpdateProductAsync(Product);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

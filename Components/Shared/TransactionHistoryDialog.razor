@@ -1,0 +1,136 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject InventoryService InventoryService
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid Class="mb-3">
+            <MudItem xs="12" sm="6">
+                <MudDatePicker @bind-Date="_startDate"
+                              Label="Start Date"
+                              Clearable="true"
+                              OnChange="@LoadTransactions" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudDatePicker @bind-Date="_endDate"
+                              Label="End Date"
+                              Clearable="true"
+                              OnChange="@LoadTransactions" />
+            </MudItem>
+        </MudGrid>
+
+        <MudTable Items="@_transactions"
+                 Hover="true"
+                 Dense="true"
+                 Loading="@_loading"
+                 Height="400px"
+                 FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>Product</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Quantity</MudTh>
+                <MudTh>Reference</MudTh>
+                <MudTh>Notes</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Date">
+                    @context.TransactionDate.ToString("MMM dd, yyyy HH:mm")
+                </MudTd>
+                <MudTd DataLabel="Product">
+                    <MudText Typo="Typo.body2">@context.Inventory.Product.Name</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Inventory.Product.SKU</MudText>
+                </MudTd>
+                <MudTd DataLabel="Type">
+                    <MudChip Size="Size.Small" Color="@GetTransactionColor(context.TransactionType)">
+                        @GetTransactionLabel(context.TransactionType)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Quantity">
+                    <MudText Typo="Typo.body2" Color="@GetQuantityColor(context.TransactionType)">
+                        @GetQuantityPrefix(context.TransactionType)@context.Quantity.ToString("N2") @context.Inventory.Product.UnitOfMeasure
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Reference">
+                    @(context.Reference ?? "-")
+                </MudTd>
+                <MudTd DataLabel="Notes">
+                    @(context.Notes ?? "-")
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    private List<InventoryTransaction> _transactions = new();
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTransactions();
+    }
+
+    private async Task LoadTransactions()
+    {
+        _loading = true;
+        _transactions = await InventoryService.GetAllTransactionsAsync(_startDate, _endDate);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private Color GetTransactionColor(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => Color.Success,
+            "OUT" => Color.Error,
+            "ADJUSTMENT" => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private string GetTransactionLabel(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => "Stock In",
+            "OUT" => "Stock Out",
+            "ADJUSTMENT" => "Adjustment",
+            _ => transactionType
+        };
+    }
+
+    private Color GetQuantityColor(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => Color.Success,
+            "OUT" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetQuantityPrefix(string transactionType)
+    {
+        return transactionType switch
+        {
+            "IN" => "+",
+            "OUT" => "-",
+            _ => ""
+        };
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+}

@@ -1,0 +1,35 @@
+html, body {
+    font-family: 'Roboto', sans-serif;
+}
+
+.mud-table-toolbar {
+    padding: 16px;
+}
+
+.page-title {
+    margin-bottom: 24px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Custom styles for low stock alerts */
+.low-stock-alert {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.out-of-stock-alert {
+    background-color: #f8d7da;
+    border-left: 4px solid #dc3545;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .mud-table {
+        font-size: 0.875rem;
+    }
+}

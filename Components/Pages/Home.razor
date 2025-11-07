@@ -1,0 +1,118 @@
+@page "/"
+@using Harvest.Services
+@inject ProductService ProductService
+@inject InventoryService InventoryService
+
+<PageTitle>Home - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Welcome to Harvest</MudText>
+<MudText Typo="Typo.body1" Class="mb-6">
+    A platform connecting suppliers (farmers) with customers (hawkers) for direct product ordering.
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Total Products</MudText>
+                <MudText Typo="Typo.h3" Color="Color.Primary">@_totalProducts</MudText>
+                <MudText Typo="Typo.body2">Active in catalog</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Low Stock Items</MudText>
+                <MudText Typo="Typo.h3" Color="Color.Warning">@_lowStockCount</MudText>
+                <MudText Typo="Typo.body2">Need reorder</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Categories</MudText>
+                <MudText Typo="Typo.h3" Color="Color.Success">@_categoryCount</MudText>
+                <MudText Typo="Typo.body2">Product categories</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Inventory Value</MudText>
+                <MudText Typo="Typo.h3" Color="Color.Info">$@_inventoryValue.ToString("N2")</MudText>
+                <MudText Typo="Typo.body2">Total stock value</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Class="mt-6">
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Quick Actions</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/products">
+                        Manage Products
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Warehouse" Href="/inventory">
+                        Manage Inventory
+                    </MudButton>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">System Status</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack>
+                    <MudChip Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success">Database Connected</MudChip>
+                    <MudChip Icon="@Icons.Material.Filled.Inventory" Color="Color.Info">@_totalProducts Products Loaded</MudChip>
+                    @if (_lowStockCount > 0)
+                    {
+                        <MudChip Icon="@Icons.Material.Filled.Warning" Color="Color.Warning">@_lowStockCount Items Low Stock</MudChip>
+                    }
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private int _totalProducts;
+    private int _lowStockCount;
+    private int _categoryCount;
+    private decimal _inventoryValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        var products = await ProductService.GetActiveProductsAsync();
+        _totalProducts = products.Count;
+
+        var categories = await ProductService.GetCategoriesAsync();
+        _categoryCount = categories.Count;
+
+        var lowStockItems = await InventoryService.GetLowStockItemsAsync();
+        _lowStockCount = lowStockItems.Count;
+
+        var allInventory = await InventoryService.GetAllInventoryAsync();
+        _inventoryValue = allInventory.Sum(i => i.QuantityAvailable * i.Product.BasePrice);
+    }
+}

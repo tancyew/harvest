@@ -1,0 +1,230 @@
+@page "/inventory"
+@using Harvest.Models
+@using Harvest.Services
+@inject InventoryService InventoryService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Inventory - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Inventory Management</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_searchString"
+                             Placeholder="Search products..."
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             Immediate="true"
+                             OnKeyUp="@OnSearch" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSwitch @bind-Value="_showLowStockOnly"
+                          Label="Show Low Stock Only"
+                          Color="Color.Warning"
+                          ValueChanged="@FilterInventory" />
+            </MudItem>
+            <MudItem xs="12" sm="12" md="4" Class="d-flex align-end justify-end">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.History"
+                          OnClick="@OpenTransactionHistoryDialog">
+                    View History
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_filteredInventory"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading"
+         LoadingProgressColor="Color.Primary">
+    <HeaderContent>
+        <MudTh>Product</MudTh>
+        <MudTh>SKU</MudTh>
+        <MudTh>Category</MudTh>
+        <MudTh>Available Stock</MudTh>
+        <MudTh>Reorder Level</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Last Updated</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Product">
+            <MudText Typo="Typo.body2">@context.Product.Name</MudText>
+        </MudTd>
+        <MudTd DataLabel="SKU">@context.Product.SKU</MudTd>
+        <MudTd DataLabel="Category">
+            <MudChip Size="Size.Small" Color="Color.Info">@context.Product.Category</MudChip>
+        </MudTd>
+        <MudTd DataLabel="Available Stock">
+            <MudText Typo="Typo.body1">
+                @context.QuantityAvailable.ToString("N2") @context.Product.UnitOfMeasure
+            </MudText>
+        </MudTd>
+        <MudTd DataLabel="Reorder Level">
+            @context.ReorderLevel.ToString("N2") @context.Product.UnitOfMeasure
+        </MudTd>
+        <MudTd DataLabel="Status">
+            @{
+                var isLowStock = context.QuantityAvailable <= context.ReorderLevel;
+                var isOutOfStock = context.QuantityAvailable == 0;
+            }
+            @if (isOutOfStock)
+            {
+                <MudChip Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">
+                    Out of Stock
+                </MudChip>
+            }
+            else if (isLowStock)
+            {
+                <MudChip Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                    Low Stock
+                </MudChip>
+            }
+            else
+            {
+                <MudChip Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                    In Stock
+                </MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Last Updated">
+            @context.LastUpdated.ToString("MMM dd, yyyy HH:mm")
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.AddCircle"
+                              Color="Color.Success"
+                              Size="Size.Small"
+                              Title="Receive Stock"
+                              OnClick="@(() => OpenStockAdjustmentDialog(context, "IN"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircle"
+                              Color="Color.Error"
+                              Size="Size.Small"
+                              Title="Issue Stock"
+                              OnClick="@(() => OpenStockAdjustmentDialog(context, "OUT"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                              Color="Color.Primary"
+                              Size="Size.Small"
+                              Title="Adjust Stock"
+                              OnClick="@(() => OpenStockAdjustmentDialog(context, "ADJUSTMENT"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                              Color="Color.Info"
+                              Size="Size.Small"
+                              Title="Update Reorder Level"
+                              OnClick="@(() => OpenReorderLevelDialog(context))" />
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Harvest.Models.Inventory> _inventory = new();
+    private List<Harvest.Models.Inventory> _filteredInventory = new();
+    private string? _searchString;
+    private bool _showLowStockOnly = false;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _inventory = await InventoryService.GetAllInventoryAsync();
+        FilterInventory();
+        _loading = false;
+    }
+
+    private void FilterInventory()
+    {
+        _filteredInventory = _inventory;
+
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            _filteredInventory = _filteredInventory
+                .Where(i => i.Product.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                           i.Product.SKU.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                           i.Product.Category.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (_showLowStockOnly)
+        {
+            _filteredInventory = _filteredInventory
+                .Where(i => i.QuantityAvailable <= i.ReorderLevel)
+                .ToList();
+        }
+    }
+
+    private void OnSearch()
+    {
+        FilterInventory();
+    }
+
+    private async Task OpenStockAdjustmentDialog(Harvest.Models.Inventory inventory, string transactionType)
+    {
+        var parameters = new DialogParameters<StockAdjustmentDialog>();
+        parameters.Add(x => x.Inventory, inventory);
+        parameters.Add(x => x.TransactionType, transactionType);
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        string title = transactionType switch
+        {
+            "IN" => "Receive Stock",
+            "OUT" => "Issue Stock",
+            "ADJUSTMENT" => "Adjust Stock Level",
+            _ => "Stock Adjustment"
+        };
+
+        var dialog = await DialogService.ShowAsync<StockAdjustmentDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Stock updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenReorderLevelDialog(Harvest.Models.Inventory inventory)
+    {
+        var parameters = new DialogParameters<ReorderLevelDialog>();
+        parameters.Add(x => x.Inventory, inventory);
+
+        var dialog = await DialogService.ShowAsync<ReorderLevelDialog>("Update Reorder Level", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Reorder level updated!", Severity.Success);
+        }
+    }
+
+    private async Task OpenTransactionHistoryDialog()
+    {
+        var dialog = await DialogService.ShowAsync<TransactionHistoryDialog>("Transaction History", new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        });
+    }
+}

@@ -1,0 +1,197 @@
+@using Harvest.Models
+@using Harvest.Services
+@inject InventoryService InventoryService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6">@Inventory.Product.Name</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">SKU: @Inventory.Product.SKU</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Current Stock: @Inventory.QuantityAvailable.ToString("N2") @Inventory.Product.UnitOfMeasure
+                </MudAlert>
+            </MudItem>
+
+            @if (TransactionType == "ADJUSTMENT")
+            {
+                <MudItem xs="12">
+                    <MudNumericField @bind-Value="_newQuantity"
+                                    Label="New Stock Quantity"
+                                    Required="true"
+                                    Min="0"
+                                    Step="1M"
+                                    Format="N2"
+                                    Adornment="Adornment.End"
+                                    AdornmentText="@Inventory.Product.UnitOfMeasure" />
+                </MudItem>
+            }
+            else
+            {
+                <MudItem xs="12">
+                    <MudNumericField @bind-Value="_quantity"
+                                    Label="@GetQuantityLabel()"
+                                    Required="true"
+                                    Min="0.01M"
+                                    Step="1M"
+                                    Format="N2"
+                                    Adornment="Adornment.End"
+                                    AdornmentText="@Inventory.Product.UnitOfMeasure" />
+                </MudItem>
+            }
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_reference"
+                             Label="Reference (Optional)"
+                             Placeholder="e.g., PO-12345, Order #123" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_notes"
+                             Label="Notes (Optional)"
+                             Lines="3"
+                             Placeholder="Additional notes..." />
+            </MudItem>
+
+            @if (TransactionType != "ADJUSTMENT" && _quantity > 0)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="@GetAlertSeverity()" Dense="true">
+                        @GetNewStockMessage()
+                    </MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="@GetButtonColor()"
+                  Variant="Variant.Filled"
+                  OnClick="Save">
+            Confirm
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Harvest.Models.Inventory Inventory { get; set; } = null!;
+
+    [Parameter]
+    public string TransactionType { get; set; } = "IN"; // IN, OUT, ADJUSTMENT
+
+    private decimal _quantity = 0;
+    private decimal _newQuantity = 0;
+    private string? _reference;
+    private string? _notes;
+
+    protected override void OnInitialized()
+    {
+        if (TransactionType == "ADJUSTMENT")
+        {
+            _newQuantity = Inventory.QuantityAvailable;
+        }
+    }
+
+    private string GetQuantityLabel()
+    {
+        return TransactionType switch
+        {
+            "IN" => "Quantity to Receive",
+            "OUT" => "Quantity to Issue",
+            _ => "Quantity"
+        };
+    }
+
+    private Color GetButtonColor()
+    {
+        return TransactionType switch
+        {
+            "IN" => Color.Success,
+            "OUT" => Color.Error,
+            _ => Color.Primary
+        };
+    }
+
+    private Severity GetAlertSeverity()
+    {
+        if (TransactionType == "OUT")
+        {
+            var newStock = Inventory.QuantityAvailable - _quantity;
+            if (newStock < 0) return Severity.Error;
+            if (newStock <= Inventory.ReorderLevel) return Severity.Warning;
+        }
+        return Severity.Success;
+    }
+
+    private string GetNewStockMessage()
+    {
+        var newStock = TransactionType == "IN"
+            ? Inventory.QuantityAvailable + _quantity
+            : Inventory.QuantityAvailable - _quantity;
+
+        var message = $"New stock will be: {newStock:N2} {Inventory.Product.UnitOfMeasure}";
+
+        if (newStock < 0)
+        {
+            return message + " (Insufficient stock!)";
+        }
+        else if (newStock <= Inventory.ReorderLevel)
+        {
+            return message + " (Below reorder level)";
+        }
+
+        return message;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            bool success;
+
+            if (TransactionType == "ADJUSTMENT")
+            {
+                success = await InventoryService.AdjustStockLevelAsync(
+                    Inventory.ProductId,
+                    _newQuantity,
+                    _notes
+                );
+            }
+            else
+            {
+                success = await InventoryService.AdjustStockAsync(
+                    Inventory.ProductId,
+                    _quantity,
+                    TransactionType,
+                    _reference,
+                    _notes
+                );
+            }
+
+            if (success)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to update stock. Please check quantity.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,261 @@
+@page "/products"
+@using Harvest.Models
+@using Harvest.Services
+@inject ProductService ProductService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Products - Harvest</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Product Management</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_searchString"
+                             Placeholder="Search products..."
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             Immediate="true"
+                             OnKeyUp="@OnSearch" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect @bind-Value="_selectedCategory"
+                          Label="Category Filter"
+                          Placeholder="All Categories"
+                          Clearable="true"
+                          OnClearButtonClick="@(() => { _selectedCategory = null; FilterProducts(); })">
+                    @foreach (var category in _categories)
+                    {
+                        <MudSelectItem Value="@category">@category</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="12" md="4" Class="d-flex align-end justify-end">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="@OpenAddProductDialog">
+                    Add Product
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudTable Items="@_filteredProducts"
+         Hover="true"
+         Striped="true"
+         Dense="true"
+         Loading="@_loading"
+         LoadingProgressColor="Color.Primary">
+    <HeaderContent>
+        <MudTh>Image</MudTh>
+        <MudTh>SKU</MudTh>
+        <MudTh>Name</MudTh>
+        <MudTh>Category</MudTh>
+        <MudTh>Unit</MudTh>
+        <MudTh>Base Price</MudTh>
+        <MudTh>Stock</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Image">
+            @if (context.Images.Any(i => i.IsPrimary))
+            {
+                <MudAvatar Image="@context.Images.First(i => i.IsPrimary).ImageUrl" Size="Size.Medium" />
+            }
+            else if (context.Images.Any())
+            {
+                <MudAvatar Image="@context.Images.First().ImageUrl" Size="Size.Medium" />
+            }
+            else
+            {
+                <MudAvatar Color="Color.Secondary" Size="Size.Medium">
+                    <MudIcon Icon="@Icons.Material.Filled.Image" />
+                </MudAvatar>
+            }
+        </MudTd>
+        <MudTd DataLabel="SKU">@context.SKU</MudTd>
+        <MudTd DataLabel="Name">
+            <MudText Typo="Typo.body2">@context.Name</MudText>
+            @if (!string.IsNullOrEmpty(context.Description))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Description</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Category">
+            <MudChip Size="Size.Small" Color="Color.Info">@context.Category</MudChip>
+        </MudTd>
+        <MudTd DataLabel="Unit">@context.UnitOfMeasure</MudTd>
+        <MudTd DataLabel="Base Price">$@context.BasePrice.ToString("N2")</MudTd>
+        <MudTd DataLabel="Stock">
+            @if (context.Inventory != null)
+            {
+                var isLowStock = context.Inventory.QuantityAvailable <= context.Inventory.ReorderLevel;
+                <MudChip Size="Size.Small" Color="@(isLowStock ? Color.Warning : Color.Success)">
+                    @context.Inventory.QuantityAvailable @context.UnitOfMeasure
+                </MudChip>
+            }
+            else
+            {
+                <MudChip Size="Size.Small" Color="Color.Default">N/A</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
+                @(context.IsActive ? "Active" : "Inactive")
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                              Color="Color.Primary"
+                              Size="Size.Small"
+                              OnClick="@(() => OpenEditProductDialog(context))" />
+                <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOff : Icons.Material.Filled.ToggleOn)"
+                              Color="Color.Warning"
+                              Size="Size.Small"
+                              OnClick="@(() => ToggleProductStatus(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                              Color="Color.Error"
+                              Size="Size.Small"
+                              OnClick="@(() => DeleteProduct(context))" />
+            </MudButtonGroup>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Product> _products = new();
+    private List<Product> _filteredProducts = new();
+    private List<string> _categories = new();
+    private string? _searchString;
+    private string? _selectedCategory;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _products = await ProductService.GetAllProductsAsync();
+        _categories = await ProductService.GetCategoriesAsync();
+        FilterProducts();
+        _loading = false;
+    }
+
+    private void FilterProducts()
+    {
+        _filteredProducts = _products;
+
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            _filteredProducts = _filteredProducts
+                .Where(p => p.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                           p.SKU.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                           p.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedCategory))
+        {
+            _filteredProducts = _filteredProducts
+                .Where(p => p.Category == _selectedCategory)
+                .ToList();
+        }
+    }
+
+    private void OnSearch()
+    {
+        FilterProducts();
+    }
+
+    private async Task OpenAddProductDialog()
+    {
+        var parameters = new DialogParameters<ProductDialog>();
+        parameters.Add(x => x.Product, new Product());
+        parameters.Add(x => x.IsNew, true);
+
+        var dialog = await DialogService.ShowAsync<ProductDialog>("Add New Product", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Product added successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditProductDialog(Product product)
+    {
+        var parameters = new DialogParameters<ProductDialog>();
+        parameters.Add(x => x.Product, product);
+        parameters.Add(x => x.IsNew, false);
+
+        var dialog = await DialogService.ShowAsync<ProductDialog>("Edit Product", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
+
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadData();
+            Snackbar.Add("Product updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ToggleProductStatus(Product product)
+    {
+        if (product.IsActive)
+        {
+            await ProductService.DeactivateProductAsync(product.ProductId);
+            Snackbar.Add($"{product.Name} deactivated", Severity.Info);
+        }
+        else
+        {
+            await ProductService.ActivateProductAsync(product.ProductId);
+            Snackbar.Add($"{product.Name} activated", Severity.Success);
+        }
+        await LoadData();
+    }
+
+    private async Task DeleteProduct(Product product)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Message", $"Are you sure you want to delete '{product.Name}'?" }
+        };
+
+        var dialog = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete '{product.Name}'? This action cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (dialog == true)
+        {
+            var success = await ProductService.DeleteProductAsync(product.ProductId);
+            if (success)
+            {
+                Snackbar.Add("Product deleted successfully!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete product", Severity.Error);
+            }
+        }
+    }
+}
